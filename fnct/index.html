@@ -211,10 +211,29 @@
             const savedEmailAvatar = localStorage.getItem('email_avatar');
             const savedEmailDescription = localStorage.getItem('email_description');
             const savedGoogleUser = localStorage.getItem('google_username');
+            const savedEpicUser = localStorage.getItem('epic_username');
+            const savedEpicAvatar = localStorage.getItem('epic_avatar');
+            const savedEpicDescription = localStorage.getItem('epic_description');
             const savedDiscordAccountKey = localStorage.getItem('discord_account_key') || savedUser;
             const savedGoogleAccountKey = localStorage.getItem('google_account_key') || savedGoogleUser;
+            const epicCallback = new URLSearchParams(window.location.search).get('epic');
 
-            if (hash.includes('access_token')) {
+            if (epicCallback === '1') {
+                try {
+                    const response = await fetch('/api/auth/epic/me', { credentials: 'include' });
+                    if (!response.ok) throw new Error('Epic Games session unavailable');
+                    const profile = await response.json();
+                    localStorage.setItem('epic_username', profile.username);
+                    localStorage.setItem('epic_avatar', profile.avatarUrl || 'etfc.png');
+                    localStorage.setItem('epic_description', profile.description || '');
+                    currentUserData = { ...profile, provider: 'epic' };
+                    window.history.replaceState({}, document.title, window.location.pathname);
+                    renderDashboard();
+                } catch (error) {
+                    console.error('Failed to load Epic Games profile:', error);
+                    renderLoggedOutState();
+                }
+            } else if (hash.includes('access_token')) {
                 const params = new URLSearchParams(hash.substring(1));
                 const accessToken = params.get('access_token');
                 const provider = params.get('state') === 'google' ? 'google' : 'discord';
@@ -255,6 +274,9 @@
                 const override = getProfileOverrides()[`google:${savedGoogleAccountKey}`] || {};
                 currentUserData = { username: override.username || savedGoogleUser, avatarUrl: override.avatarUrl || localStorage.getItem('google_avatar') || 'etfc.png', description: override.description || '', email: '', provider: 'google' };
                 renderDashboard();
+            } else if (savedEpicUser) {
+                currentUserData = { username: savedEpicUser, avatarUrl: savedEpicAvatar || 'etfc.png', description: savedEpicDescription || '', email: '', provider: 'epic' };
+                renderDashboard();
             } else {
                 renderLoggedOutState();
             }
@@ -287,17 +309,7 @@
         }
 
         function loginWithEpicGames() {
-            if (!EPIC_CLIENT_ID) {
-                alert('Epic Games login needs an Epic Games client ID in the page configuration.');
-                return;
-            }
-            const params = new URLSearchParams({
-                client_id: EPIC_CLIENT_ID,
-                redirect_uri: REDIRECT_URI,
-                response_type: 'code',
-                scope: 'basic_profile'
-            });
-            window.location.href = `https://www.epicgames.com/id/authorize?${params.toString()}`;
+            window.location.href = '/api/auth/epic/login';
         }
 
         function togglePasswordVisibility(inputId, buttonId) {
@@ -1496,6 +1508,7 @@
 
         function logout() {
             clearWelcomeTimers();
+            fetch('/api/auth/epic/logout', { method: 'POST', credentials: 'include' }).catch(() => {});
             localStorage.removeItem('discord_username');
             localStorage.removeItem('discord_avatar');
             localStorage.removeItem('email_username');
@@ -1504,6 +1517,9 @@
             localStorage.removeItem('email_description');
             localStorage.removeItem('google_username');
             localStorage.removeItem('google_avatar');
+            localStorage.removeItem('epic_username');
+            localStorage.removeItem('epic_avatar');
+            localStorage.removeItem('epic_description');
             localStorage.removeItem('discord_account_key');
             localStorage.removeItem('google_account_key');
             currentUserData = { username: '', avatarUrl: 'etfc.png', description: '', email: '' };
