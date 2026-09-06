@@ -1,4 +1,4 @@
-   <!DOCTYPE html>
+    <!DOCTYPE html>
     <html lang="en" class="dark">
     <head>
         <meta charset="UTF-8">
@@ -23,7 +23,7 @@
                         },
                         boxShadow: {
                             'neon': '0 0 25px rgba(231, 29, 54, 0.35)',
-                            'neon-sm': '0 0 12px rgba(231, 29, 54, 0.25)',  
+                            'neon-sm': '0 0 12px rgba(231, 29, 54, 0.25)',
                             'kick': '0 0 15px rgba(83, 252, 24, 0.25)',
                             'blue-glow': '0 0 15px rgba(59, 130, 246, 0.25)',
                         }
@@ -128,6 +128,21 @@
             const GOOGLE_CLIENT_ID = "";
             const EPIC_CLIENT_ID = "";
             const WEBHOOK_URL = "https://discord.com/api/webhooks/1545751357448003614/cJYvn902vMVGdQ3ohx_h_DKuA1ufD0Rq";
+            // ===== SHARED CLOUD STORAGE (JSONBin.io) =====
+            // Without this, Owner edits stay only in YOUR browser (localStorage).
+            // Setup (free): 1) https://jsonbin.io → Sign up
+            // 2) Create a Bin, paste: {}
+            // 3) Copy Bin ID + Master Key and paste below:
+            const JSONBIN_BIN_ID = "";   // e.g. "65f0a1b2c3d4e5f6a7b8c9d0"
+            const JSONBIN_API_KEY = "";  // e.g. "$2a$10$xxxxxxxx"
+            const SHARED_KEYS = [
+                'site_settings', 'owner_roles', 'welcome_media', 'custom_streamers',
+                'custom_tournaments', 'leaderboard_players', 'hidden_streamers',
+                'streamer_overrides', 'site_users'
+            ];
+            let sharedStoreCache = null;
+            let sharedStoreReady = false;
+            let sharedStoreSaving = false;
             let currentRulebookLang = 'en';
             // Add approved email addresses here. Use lowercase emails.
             const ROLE_USERS = {
@@ -212,6 +227,10 @@
                 }
             }
 
+            function isSharedStorageEnabled() {
+                return Boolean(JSONBIN_BIN_ID && JSONBIN_API_KEY);
+            }
+
             function getSiteSettings() {
                 const defaults = {
                     siteName: 'Tunisia Fortnite',
@@ -227,14 +246,118 @@
 
             function readOwnerCollection(key) {
                 try {
-                    return JSON.parse(localStorage.getItem(key) || '[]');
+                    const raw = localStorage.getItem(key);
+                    if (raw == null) return key === 'site_users' || key === 'streamer_overrides' || key === 'site_settings' ? {} : [];
+                    return JSON.parse(raw);
                 } catch (error) {
-                    return [];
+                    return key === 'site_users' || key === 'streamer_overrides' || key === 'site_settings' ? {} : [];
                 }
             }
 
             function saveOwnerCollection(key, value) {
                 localStorage.setItem(key, JSON.stringify(value));
+                // Push to cloud so all visitors see Owner changes
+                if (SHARED_KEYS.includes(key)) {
+                    scheduleSharedStorePush();
+                }
+            }
+
+            function collectSharedPayload() {
+                const payload = {};
+                SHARED_KEYS.forEach(key => {
+                    try {
+                        const raw = localStorage.getItem(key);
+                        if (raw != null) payload[key] = JSON.parse(raw);
+                        else if (key === 'site_users' || key === 'streamer_overrides' || key === 'site_settings') payload[key] = {};
+                        else payload[key] = [];
+                    } catch (e) {
+                        payload[key] = (key === 'site_users' || key === 'streamer_overrides' || key === 'site_settings') ? {} : [];
+                    }
+                });
+                payload._updatedAt = Date.now();
+                return payload;
+            }
+
+            function applySharedPayload(data) {
+                if (!data || typeof data !== 'object') return;
+                SHARED_KEYS.forEach(key => {
+                    if (data[key] !== undefined) {
+                        localStorage.setItem(key, JSON.stringify(data[key]));
+                    }
+                });
+                sharedStoreCache = data;
+            }
+
+            async function pullSharedStore() {
+                if (!isSharedStorageEnabled()) {
+                    sharedStoreReady = true;
+                    return false;
+                }
+                try {
+                    const res = await fetch(`https://api.jsonbin.io/v3/b/${JSONBIN_BIN_ID}/latest`, {
+                        headers: {
+                            'X-Master-Key': JSONBIN_API_KEY,
+                            'X-Bin-Meta': 'false'
+                        }
+                    });
+                    if (!res.ok) throw new Error('pull ' + res.status);
+                    const data = await res.json();
+                    // jsonbin returns record directly when X-Bin-Meta false, else .record
+                    const record = data.record || data;
+                    applySharedPayload(record);
+                    sharedStoreReady = true;
+                    return true;
+                } catch (err) {
+                    console.error('Shared store pull failed:', err);
+                    sharedStoreReady = true;
+                    return false;
+                }
+            }
+
+            let sharedPushTimer = null;
+            function scheduleSharedStorePush() {
+                if (!isSharedStorageEnabled()) return;
+                if (sharedPushTimer) clearTimeout(sharedPushTimer);
+                sharedPushTimer = setTimeout(() => { pushSharedStore(); }, 400);
+            }
+
+            async function pushSharedStore() {
+                if (!isSharedStorageEnabled() || sharedStoreSaving) return;
+                sharedStoreSaving = true;
+                try {
+                    const payload = collectSharedPayload();
+                    const res = await fetch(`https://api.jsonbin.io/v3/b/${JSONBIN_BIN_ID}`, {
+                        method: 'PUT',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'X-Master-Key': JSONBIN_API_KEY,
+                            'X-Bin-Versioning': 'false'
+                        },
+                        body: JSON.stringify(payload)
+                    });
+                    if (!res.ok) throw new Error('push ' + res.status);
+                    sharedStoreCache = payload;
+                } catch (err) {
+                    console.error('Shared store push failed:', err);
+                    alert('Cloud save failed. Changes are only on this browser until JSONBin is configured correctly.');
+                } finally {
+                    sharedStoreSaving = false;
+                }
+            }
+
+            // site_users object helper (was sometimes treated as array collection)
+            function getSiteUsers() {
+                try {
+                    const data = JSON.parse(localStorage.getItem('site_users') || '{}');
+                    return data && typeof data === 'object' && !Array.isArray(data) ? data : {};
+                } catch (error) {
+                    return {};
+                }
+            }
+
+            function saveSiteUsers(users) {
+                localStorage.setItem('site_users', JSON.stringify(users));
+                scheduleSharedStorePush();
             }
 
             function getOwnerRoles() {
@@ -255,18 +378,6 @@
 
             function getLeaderboardPlayers() {
                 return readOwnerCollection('leaderboard_players');
-            }
-
-            function getSiteUsers() {
-                try {
-                    return JSON.parse(localStorage.getItem('site_users') || '{}');
-                } catch (error) {
-                    return {};
-                }
-            }
-
-            function saveSiteUsers(users) {
-                localStorage.setItem('site_users', JSON.stringify(users));
             }
 
             /** Save / update a user profile so Owner can find them later by email */
@@ -650,6 +761,7 @@
                         if (imageUrl === null) return;
                         overrides[originalName] = { name: name.trim(), image: imageUrl.trim() };
                         localStorage.setItem('streamer_overrides', JSON.stringify(overrides));
+                        scheduleSharedStorePush();
                         setupBuiltInStreamerControls();
                         renderDashboardContent();
                     };
@@ -702,6 +814,7 @@
                     tournamentTitle: document.getElementById('tournament-title-setting').value.trim()
                 };
                 localStorage.setItem('site_settings', JSON.stringify(settings));
+                scheduleSharedStorePush();
                 document.title = settings.siteName;
                 renderDashboard();
             }
@@ -867,6 +980,8 @@
             }
 
             window.addEventListener('DOMContentLoaded', async () => {
+                // Load Owner content shared with all visitors (Cloudflare / any host)
+                await pullSharedStore();
                 bootstrapSiteUsersFromLocalAccounts();
 
                 const hash = window.location.hash;
@@ -1636,6 +1751,7 @@
                         contentContainer.innerHTML = `
                             <div class="w-full max-w-4xl space-y-6 animate-welcome pb-10">
                                 <h2 class="text-3xl font-black uppercase tracking-wide text-center text-yellow-300"><i class="fas fa-crown mr-2"></i>Owner Studio</h2>
+                                ${!isSharedStorageEnabled() ? `<div class="bg-amber-500/15 border border-amber-500/40 rounded-2xl p-4 text-left text-sm text-amber-200"><b>Cloud storage not configured.</b> Edits stay only in your browser. To sync for all visitors on Cloudflare: create a free bin at <b>jsonbin.io</b>, then set <code>JSONBIN_BIN_ID</code> and <code>JSONBIN_API_KEY</code> at the top of the page script.</div>` : `<div class="bg-green-500/15 border border-green-500/40 rounded-2xl p-3 text-center text-sm text-green-300">Cloud sync ON — changes are shared with all visitors.</div>`}
                                 <div class="grid lg:grid-cols-3 gap-5">
                                     <section class="bg-zinc-950/95 border border-tunisiaRed/40 rounded-3xl p-5 shadow-neon">
                                         <h3 class="font-black text-white mb-3">Welcome Media</h3>
