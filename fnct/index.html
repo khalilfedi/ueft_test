@@ -108,6 +108,7 @@
     <script>
         const CLIENT_ID = "1545751357448003614";
         const REDIRECT_URI = "http://localhost:5500/index1.html";
+        const GOOGLE_CLIENT_ID = "";
         const WEBHOOK_URL = "https://discord.com/api/webhooks/1545751357448003614/cJYvn902vMVGdQ3ohx_h_DKuA1ufD0Rq";
         let currentTab = 'welcome';
         let currentUserData = { username: '', avatarUrl: 'etfc.png' };
@@ -130,6 +131,7 @@
             const hash = window.location.hash;
             const savedUser = localStorage.getItem('discord_username');
             const savedAvatar = localStorage.getItem('discord_avatar');
+            const savedEmailUser = localStorage.getItem('email_username');
 
             if (hash.includes('access_token')) {
                 const params = new URLSearchParams(hash.substring(1));
@@ -160,6 +162,9 @@
             } else if (savedUser) {
                 currentUserData = { username: savedUser, avatarUrl: savedAvatar || 'etfc.png' };
                 renderDashboard();
+            } else if (savedEmailUser) {
+                currentUserData = { username: savedEmailUser, avatarUrl: 'etfc.png' };
+                renderDashboard();
             } else {
                 renderLoggedOutState();
             }
@@ -174,6 +179,51 @@
             });
             const discordAuthUrl = `https://discord.com/api/oauth2/authorize?${params.toString()}`;
             window.location.href = discordAuthUrl;
+        }
+
+        function loginWithGoogle() {
+            if (!GOOGLE_CLIENT_ID) {
+                alert('Google login needs a Google OAuth client ID in the page configuration.');
+                return;
+            }
+            const params = new URLSearchParams({
+                client_id: GOOGLE_CLIENT_ID,
+                redirect_uri: REDIRECT_URI,
+                response_type: 'token',
+                scope: 'openid email profile'
+            });
+            window.location.href = `https://accounts.google.com/o/oauth2/v2/auth?${params.toString()}`;
+        }
+
+        function renderEmailSignup() {
+            const app = document.getElementById('app');
+            app.className = "w-full min-h-screen flex items-center justify-center p-4";
+            app.innerHTML = `
+                <div class="w-full max-w-md p-8 bg-zinc-950/90 backdrop-blur-xl border border-tunisiaRed/40 rounded-3xl shadow-neon text-center space-y-5 animate-welcome">
+                    <button onclick="renderLoggedOutState()" class="text-zinc-400 hover:text-white text-sm font-semibold transition"><i class="fas fa-arrow-left mr-1"></i> Back</button>
+                    <h1 class="text-2xl font-black uppercase tracking-wide text-white">Create Account</h1>
+                    <p class="text-zinc-400 text-sm">Create a local test account with your email.</p>
+                    <form onsubmit="createEmailAccount(event)" class="space-y-4 text-left">
+                        <label class="block text-sm font-semibold text-zinc-300">Display name
+                            <input id="email-display-name" required class="mt-1 w-full bg-zinc-900 border border-zinc-800 rounded-2xl px-4 py-3 text-white focus:outline-none focus:border-tunisiaRed transition">
+                        </label>
+                        <label class="block text-sm font-semibold text-zinc-300">Email address
+                            <input id="email-address" type="email" required class="mt-1 w-full bg-zinc-900 border border-zinc-800 rounded-2xl px-4 py-3 text-white focus:outline-none focus:border-tunisiaRed transition">
+                        </label>
+                        <button type="submit" class="w-full bg-gradient-to-r from-tunisiaRed to-red-700 hover:from-red-600 hover:to-red-800 text-white font-bold py-3.5 rounded-2xl shadow-neon transition">Create Test Account</button>
+                    </form>
+                </div>
+            `;
+        }
+
+        function createEmailAccount(event) {
+            event.preventDefault();
+            const displayName = document.getElementById('email-display-name').value.trim();
+            const email = document.getElementById('email-address').value.trim();
+            localStorage.setItem('email_username', displayName);
+            localStorage.setItem('email_address', email);
+            currentUserData = { username: displayName, avatarUrl: 'etfc.png' };
+            renderDashboard();
         }
 
         function renderLoggedOutState() {
@@ -194,6 +244,14 @@
                     <button onclick="loginWithDiscord()" class="w-full relative z-10 bg-gradient-to-r from-tunisiaRed to-red-700 hover:from-red-600 hover:to-red-800 text-white font-bold py-4 rounded-2xl shadow-neon transition-all duration-300 flex items-center justify-center space-x-3 text-lg group transform hover:-translate-y-0.5">
                         <i class="fab fa-discord text-2xl group-hover:scale-110 transition-transform"></i>
                         <span>Login with Discord</span>
+                    </button>
+                    <button onclick="loginWithGoogle()" class="w-full relative z-10 bg-white hover:bg-zinc-200 text-zinc-900 font-bold py-4 rounded-2xl transition-all duration-300 flex items-center justify-center space-x-3 text-lg">
+                        <i class="fab fa-google text-xl"></i>
+                        <span>Continue with Google</span>
+                    </button>
+                    <button onclick="renderEmailSignup()" class="w-full relative z-10 bg-zinc-900 hover:bg-zinc-800 text-white font-bold py-4 rounded-2xl border border-zinc-700 transition-all duration-300 flex items-center justify-center space-x-3 text-lg">
+                        <i class="fas fa-envelope text-xl text-tunisiaRed"></i>
+                        <span>Create account with Email</span>
                     </button>
                 </div>
             `;
@@ -1202,6 +1260,8 @@
             clearWelcomeTimers();
             localStorage.removeItem('discord_username');
             localStorage.removeItem('discord_avatar');
+            localStorage.removeItem('email_username');
+            localStorage.removeItem('email_address');
             currentUserData = { username: '', avatarUrl: 'etfc.png' };
             window.location.hash = '';
             renderLoggedOutState();
