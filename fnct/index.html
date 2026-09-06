@@ -124,6 +124,7 @@
         const CLIENT_ID = "1545751357448003614";
         const REDIRECT_URI = "http://localhost:5500/index1.html";
         const GOOGLE_CLIENT_ID = "";
+        const EPIC_CLIENT_ID = "";
         const WEBHOOK_URL = "https://discord.com/api/webhooks/1545751357448003614/cJYvn902vMVGdQ3ohx_h_DKuA1ufD0Rq";
         let currentTab = 'welcome';
         let currentUserData = { username: '', avatarUrl: 'etfc.png', description: '', email: '' };
@@ -176,6 +177,29 @@
             } catch (error) {
                 return {};
             }
+        }
+
+        function maskEmail(email) {
+            if (!email || !email.includes('@')) return email || 'Discord Connected Account';
+            const [name, domain] = email.split('@');
+            return `${name.slice(0, 2)}***@${domain}`;
+        }
+
+        function removeProfileImage() {
+            const preview = document.getElementById('profile-avatar-preview');
+            const fileInput = document.getElementById('profile-image-file');
+            const urlInput = document.getElementById('profile-image-url');
+            if (preview) preview.src = 'etfc.png';
+            if (fileInput) fileInput.value = '';
+            if (urlInput) urlInput.value = '';
+            currentUserData.avatarUrl = 'etfc.png';
+        }
+
+        function previewProfileImage(event) {
+            const file = event.target.files[0];
+            const preview = document.getElementById('profile-avatar-preview');
+            if (!file || !preview) return;
+            preview.src = URL.createObjectURL(file);
         }
 
         window.addEventListener('DOMContentLoaded', async () => {
@@ -262,6 +286,30 @@
             window.location.href = `https://accounts.google.com/o/oauth2/v2/auth?${params.toString()}`;
         }
 
+        function loginWithEpicGames() {
+            if (!EPIC_CLIENT_ID) {
+                alert('Epic Games login needs an Epic Games client ID in the page configuration.');
+                return;
+            }
+            const params = new URLSearchParams({
+                client_id: EPIC_CLIENT_ID,
+                redirect_uri: REDIRECT_URI,
+                response_type: 'code',
+                scope: 'basic_profile'
+            });
+            window.location.href = `https://www.epicgames.com/id/authorize?${params.toString()}`;
+        }
+
+        function togglePasswordVisibility(inputId, buttonId) {
+            const input = document.getElementById(inputId);
+            const button = document.getElementById(buttonId);
+            if (!input || !button) return;
+            const isHidden = input.type === 'password';
+            input.type = isHidden ? 'text' : 'password';
+            button.innerHTML = `<i class="fas fa-${isHidden ? 'eye-slash' : 'eye'}"></i>`;
+            button.setAttribute('aria-label', isHidden ? 'Hide password' : 'Show password');
+        }
+
         function renderEmailSignup() {
             const app = document.getElementById('app');
             app.className = "w-full min-h-screen flex items-center justify-center p-4";
@@ -278,7 +326,16 @@
                             <input id="email-address" type="email" required class="mt-1 w-full bg-zinc-900 border border-zinc-800 rounded-2xl px-4 py-3 text-white focus:outline-none focus:border-tunisiaRed transition">
                         </label>
                         <label class="block text-sm font-semibold text-zinc-300">Password
-                            <input id="email-password" type="password" minlength="6" required class="mt-1 w-full bg-zinc-900 border border-zinc-800 rounded-2xl px-4 py-3 text-white focus:outline-none focus:border-tunisiaRed transition">
+                            <div class="relative mt-1">
+                                <input id="email-password" type="password" minlength="6" required class="w-full bg-zinc-900 border border-zinc-800 rounded-2xl px-4 py-3 pr-12 text-white focus:outline-none focus:border-tunisiaRed transition">
+                                <button type="button" id="show-email-password" onclick="togglePasswordVisibility('email-password', 'show-email-password')" aria-label="Show password" class="absolute right-2 top-1/2 -translate-y-1/2 text-zinc-400 hover:text-white px-2 py-1"><i class="fas fa-eye"></i></button>
+                            </div>
+                        </label>
+                        <label class="block text-sm font-semibold text-zinc-300">Confirm password
+                            <div class="relative mt-1">
+                                <input id="email-password-confirm" type="password" minlength="6" required class="w-full bg-zinc-900 border border-zinc-800 rounded-2xl px-4 py-3 pr-12 text-white focus:outline-none focus:border-tunisiaRed transition">
+                                <button type="button" id="show-confirm-password" onclick="togglePasswordVisibility('email-password-confirm', 'show-confirm-password')" aria-label="Show password confirmation" class="absolute right-2 top-1/2 -translate-y-1/2 text-zinc-400 hover:text-white px-2 py-1"><i class="fas fa-eye"></i></button>
+                            </div>
                         </label>
                         <button type="submit" class="w-full bg-gradient-to-r from-tunisiaRed to-red-700 hover:from-red-600 hover:to-red-800 text-white font-bold py-3.5 rounded-2xl shadow-neon transition">Create Test Account</button>
                     </form>
@@ -314,6 +371,11 @@
             const displayName = document.getElementById('email-display-name').value.trim();
             const email = document.getElementById('email-address').value.trim().toLowerCase();
             const password = document.getElementById('email-password').value;
+            const passwordConfirmation = document.getElementById('email-password-confirm').value;
+            if (password !== passwordConfirmation) {
+                alert('Passwords do not match.');
+                return;
+            }
             const accounts = getLocalAccounts();
             if (accounts.some(account => account.email === email)) {
                 alert('An account with this email already exists.');
@@ -398,6 +460,10 @@
                     <button onclick="loginWithGoogle()" class="w-full relative z-10 bg-white hover:bg-zinc-200 text-zinc-900 font-bold py-4 rounded-2xl transition-all duration-300 flex items-center justify-center space-x-3 text-lg">
                         <i class="fab fa-google text-xl"></i>
                         <span>Continue with Google</span>
+                    </button>
+                    <button onclick="loginWithEpicGames()" class="w-full relative z-10 bg-zinc-800 hover:bg-zinc-700 text-white font-bold py-4 rounded-2xl border border-zinc-600 transition-all duration-300 flex items-center justify-center space-x-3 text-lg">
+                        <img src="Epic-Games.png" alt="Epic Games" class="w-9 h-9 rounded-lg object-contain bg-transparent" />
+                        <span>Login with Epic Games</span>
                     </button>
                     <button onclick="renderEmailSignup()" class="w-full relative z-10 bg-zinc-900 hover:bg-zinc-800 text-white font-bold py-4 rounded-2xl border border-zinc-700 transition-all duration-300 flex items-center justify-center space-x-3 text-lg">
                         <i class="fas fa-envelope text-xl text-tunisiaRed"></i>
@@ -764,10 +830,13 @@
                             <div class="absolute -top-20 -right-20 w-40 h-40 bg-tunisiaRed/10 rounded-full blur-3xl pointer-events-none"></div>
                             <h2 class="text-2xl font-black uppercase tracking-wide border-b border-zinc-800 pb-4 text-white">Account Settings</h2>
                             <div class="flex items-center space-x-5">
-                                <img src="${currentUserData.avatarUrl}" alt="Avatar" class="w-20 h-20 rounded-2xl border-2 border-tunisiaRed object-cover shadow-neon-sm">
+                                <button type="button" onclick="document.getElementById('profile-image-file').click()" class="group relative w-20 h-20 shrink-0 rounded-2xl overflow-hidden border-2 border-tunisiaRed shadow-neon-sm" title="Choose profile image">
+                                    <img id="profile-avatar-preview" src="${currentUserData.avatarUrl}" alt="Profile image" class="w-full h-full object-cover transition group-hover:scale-110">
+                                    <span class="absolute inset-0 flex items-center justify-center bg-black/60 text-white opacity-0 group-hover:opacity-100 transition"><i class="fas fa-camera"></i></span>
+                                </button>
                                 <div>
                                     <h3 class="text-xl font-bold text-white">${currentUserData.username}</h3>
-                                    <p class="text-zinc-400 text-sm">${currentUserData.email || 'Discord Connected Account'}</p>
+                                    <p class="text-zinc-400 text-sm">${maskEmail(currentUserData.email)}</p>
                                     <p class="text-zinc-400 text-sm mt-1">${currentUserData.description || 'No description yet.'}</p>
                                 </div>
                             </div>
@@ -781,9 +850,11 @@
                                 <label class="block text-sm font-semibold text-zinc-300">Profile image URL
                                     <input id="profile-image-url" type="url" placeholder="https://..." class="mt-1 w-full bg-zinc-900 border border-zinc-800 rounded-2xl px-4 py-3 text-white focus:outline-none focus:border-tunisiaRed transition">
                                 </label>
-                                <label class="block text-sm font-semibold text-zinc-300">Or upload an image
-                                    <input id="profile-image-file" type="file" accept="image/*" class="mt-1 block w-full text-sm text-zinc-400">
-                                </label>
+                                <div class="flex gap-3">
+                                    <input id="profile-image-file" type="file" accept="image/*" class="hidden" onchange="previewProfileImage(event)">
+                                    <button type="button" onclick="document.getElementById('profile-image-file').click()" class="flex-1 bg-zinc-900 hover:bg-zinc-800 border border-zinc-700 text-white px-4 py-3 rounded-xl font-bold text-sm transition"><i class="fas fa-upload mr-2 text-tunisiaRed"></i>Choose Image</button>
+                                    <button type="button" onclick="removeProfileImage()" class="bg-red-950/60 hover:bg-red-900 border border-red-500/40 text-red-300 px-4 py-3 rounded-xl font-bold text-sm transition"><i class="fas fa-trash mr-2"></i>Remove</button>
+                                </div>
                                 <button type="submit" class="w-full bg-gradient-to-r from-tunisiaRed to-red-700 hover:from-red-600 hover:to-red-800 text-white px-6 py-2.5 rounded-xl font-bold text-sm transition shadow-neon-sm">Save Profile</button>
                             </form>
                             <button onclick="logout()" class="w-full bg-gradient-to-r from-tunisiaRed to-red-700 hover:from-red-600 hover:to-red-800 text-white px-6 py-2.5 rounded-xl font-bold text-sm transition shadow-neon-sm">Log Out</button>
