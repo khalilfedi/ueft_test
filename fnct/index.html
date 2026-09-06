@@ -107,6 +107,7 @@
 
     <script>
         const CLIENT_ID = "1545751357448003614";
+        const REDIRECT_URI = "http://localhost:5500/index1.html";
         const WEBHOOK_URL = "https://discord.com/api/webhooks/1545751357448003614/cJYvn902vMVGdQ3ohx_h_DKuA1ufD0Rq";
         let currentTab = 'welcome';
         let currentUserData = { username: '', avatarUrl: 'etfc.png' };
@@ -165,8 +166,13 @@
         });
 
         function loginWithDiscord() {
-            const redirectUri = window.location.origin + window.location.pathname;
-            const discordAuthUrl = `https://discord.com/api/oauth2/authorize?client_id=${CLIENT_ID}&redirect_uri=${encodeURIComponent(redirectUri)}&response_type=token&scope=identify`;
+            const params = new URLSearchParams({
+                client_id: CLIENT_ID,
+                redirect_uri: REDIRECT_URI,
+                response_type: 'token',
+                scope: 'identify'
+            });
+            const discordAuthUrl = `https://discord.com/api/oauth2/authorize?${params.toString()}`;
             window.location.href = discordAuthUrl;
         }
 
