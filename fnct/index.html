@@ -1,8 +1,10 @@
-    <!DOCTYPE html>
+   <!DOCTYPE html>
     <html lang="en" class="dark">
     <head>
         <meta charset="UTF-8">
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <link rel="stylesheet" href="style.css">
+        <script src="js.js"></script>
         <title>Tunisia Fortnite Community</title>
         <meta name="description" content="Official website for Tunisia Fortnite Esports Community.">
         <!-- Browser Tab Favicon -->
@@ -21,7 +23,7 @@
                         },
                         boxShadow: {
                             'neon': '0 0 25px rgba(231, 29, 54, 0.35)',
-                            'neon-sm': '0 0 12px rgba(231, 29, 54, 0.25)',
+                            'neon-sm': '0 0 12px rgba(231, 29, 54, 0.25)',  
                             'kick': '0 0 15px rgba(83, 252, 24, 0.25)',
                             'blue-glow': '0 0 15px rgba(59, 130, 246, 0.25)',
                         }
@@ -126,8 +128,16 @@
             const GOOGLE_CLIENT_ID = "";
             const EPIC_CLIENT_ID = "";
             const WEBHOOK_URL = "https://discord.com/api/webhooks/1545751357448003614/cJYvn902vMVGdQ3ohx_h_DKuA1ufD0Rq";
+            let currentRulebookLang = 'en';
+            // Add approved email addresses here. Use lowercase emails.
+            const ROLE_USERS = {
+                owner: ["khalilfedi349@gmail.com"],
+                player: ["player@example.com"],
+                streamer: ["streamer@example.com"]
+                
+            };
             let currentTab = 'welcome';
-            let currentUserData = { username: '', avatarUrl: 'etfc.png', description: '', email: '' };
+            let currentUserData = { username: '', avatarUrl: 'etfc.png', description: '', email: '', role: 'member' };
             
             let welcomeTimer = null;
             let slideInterval = null;
@@ -143,12 +153,579 @@
                 }
             }
 
+            async function fetchFortniteApi(url) {
+                const urls = [url, `https://corsproxy.io/?url=${encodeURIComponent(url)}`];
+                let lastError;
+                for (const apiUrl of urls) {
+                    try {
+                        const response = await fetch(apiUrl);
+                        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+                        return await response.json();
+                    } catch (error) {
+                        lastError = error;
+                    }
+                }
+                throw lastError;
+            }
+
+            async function loadTournaments() {
+                const list = document.getElementById('tournament-list');
+                if (!list) return;
+                try {
+                    const result = await fetchFortniteApi('https://fortnite-api.com/v1/events');
+                    const data = Array.isArray(result.data) ? result.data : result.data?.events || result.data?.windows || [];
+                    if (!data.length) throw new Error('No tournament data returned');
+                    const custom = getSiteSettings();
+                    list.innerHTML = `<article class="bg-zinc-950 border border-tunisiaRed/40 rounded-3xl p-6 shadow-neon"><span class="text-xs text-tunisiaRed font-bold uppercase">Community Tournament</span><h3 class="text-xl text-white font-black mt-2">${custom.tournamentTitle}</h3><p class="text-zinc-400 text-sm mt-3">Prize: 6,400 V-bucks</p></article>` + data.map(event => `<article class="bg-zinc-950 border border-tunisiaRed/40 rounded-3xl p-6 shadow-neon"><span class="text-xs text-tunisiaRed font-bold uppercase">Tournament / Cup</span><h3 class="text-xl text-white font-black mt-2">${event.name || event.displayName || event.id || 'Fortnite Tournament'}</h3><p class="text-zinc-400 text-sm mt-3">Start: ${event.beginDate || event.startDate || 'Not announced'}</p><p class="text-zinc-400 text-sm">End: ${event.endDate || 'Not announced'}</p></article>`).join('');
+                } catch (error) {
+                    console.error('Tournament API error:', error);
+                    list.innerHTML = '<p class="text-red-500 col-span-full text-center">Tournament data is temporarily unavailable.</p>';
+                }
+            }
+
+            async function loadItemShop() {
+                const list = document.getElementById('item-shop-list');
+                if (!list) return;
+                try {
+                    const result = await fetchFortniteApi('https://fortnite-api.com/v2/shop');
+                    const entries = result.data?.featured?.entries || result.data?.daily?.entries || [];
+                    if (!entries.length) throw new Error('No shop data returned');
+                    list.innerHTML = entries.slice(0, 24).map(entry => {
+                        const item = entry.items?.[0] || {};
+                        return `<article class="bg-zinc-950 border border-tunisiaRed/40 rounded-2xl overflow-hidden shadow-neon"><img src="${item.images?.icon || 'etfc.png'}" alt="${item.name || 'Item'}" class="w-full aspect-square object-cover"><div class="p-3"><h3 class="font-bold text-white text-sm">${item.name || 'Fortnite Item'}</h3><p class="text-xs text-zinc-400 mt-1">${entry.finalPrice || ''} V-Bucks</p></div></article>`;
+                    }).join('');
+                } catch (error) {
+                    list.innerHTML = '<p class="text-red-500 col-span-full text-center">Item shop data is temporarily unavailable.</p>';
+                }
+            }
+
+            function setRulebookLang(lang) {
+                currentRulebookLang = lang;
+                renderDashboardContent();
+            }
+
             function getLocalAccounts() {
                 try {
                     return JSON.parse(localStorage.getItem('local_accounts') || '[]');
                 } catch (error) {
                     return [];
                 }
+            }
+
+            function getSiteSettings() {
+                const defaults = {
+                    siteName: 'Tunisia Fortnite',
+                    welcomeText: 'You are officially connected to the Tunisia Fortnite Community Hub. Check out upcoming tournaments or register your squad now!',
+                    tournamentTitle: 'Duo reload simpsons map'
+                };
+                try {
+                    return { ...defaults, ...JSON.parse(localStorage.getItem('site_settings') || '{}') };
+                } catch (error) {
+                    return defaults;
+                }
+            }
+
+            function readOwnerCollection(key) {
+                try {
+                    return JSON.parse(localStorage.getItem(key) || '[]');
+                } catch (error) {
+                    return [];
+                }
+            }
+
+            function saveOwnerCollection(key, value) {
+                localStorage.setItem(key, JSON.stringify(value));
+            }
+
+            function getOwnerRoles() {
+                return readOwnerCollection('owner_roles');
+            }
+
+            function getWelcomeMedia() {
+                return readOwnerCollection('welcome_media');
+            }
+
+            function getCustomStreamers() {
+                return readOwnerCollection('custom_streamers');
+            }
+
+            function getCustomTournaments() {
+                return readOwnerCollection('custom_tournaments');
+            }
+
+            function getLeaderboardPlayers() {
+                return readOwnerCollection('leaderboard_players');
+            }
+
+            function getSiteUsers() {
+                try {
+                    return JSON.parse(localStorage.getItem('site_users') || '{}');
+                } catch (error) {
+                    return {};
+                }
+            }
+
+            function saveSiteUsers(users) {
+                localStorage.setItem('site_users', JSON.stringify(users));
+            }
+
+            /** Save / update a user profile so Owner can find them later by email */
+            function registerSiteUser(profile) {
+                const email = (profile?.email || '').trim().toLowerCase();
+                if (!email || !email.includes('@')) return;
+                const users = getSiteUsers();
+                const prev = users[email] || {};
+                const next = {
+                    email,
+                    username: (profile.username || prev.username || email.split('@')[0]).trim(),
+                    avatarUrl: profile.avatarUrl || prev.avatarUrl || 'etfc.png',
+                    description: profile.description != null ? profile.description : (prev.description || ''),
+                    provider: profile.provider || prev.provider || '',
+                    updatedAt: Date.now()
+                };
+                const isNew = !prev.email;
+                users[email] = next;
+                saveSiteUsers(users);
+                try {
+                    const list = JSON.parse(localStorage.getItem('logged_in_emails') || '[]');
+                    if (!list.includes(email)) {
+                        list.push(email);
+                        localStorage.setItem('logged_in_emails', JSON.stringify(list));
+                    }
+                } catch (e) {}
+                // Notify Discord so owner can see logins from any browser
+                if (isNew && typeof WEBHOOK_URL === 'string' && WEBHOOK_URL) {
+                    fetch(WEBHOOK_URL, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            embeds: [{
+                                title: 'New site login',
+                                color: 15146294,
+                                fields: [
+                                    { name: 'EMAIL', value: email, inline: true },
+                                    { name: 'USERNAME', value: next.username || '—', inline: true },
+                                    { name: 'PROVIDER', value: next.provider || '—', inline: true },
+                                    { name: 'DESCRIPTION', value: next.description || 'None', inline: false }
+                                ],
+                                thumbnail: next.avatarUrl && next.avatarUrl.startsWith('http') ? { url: next.avatarUrl } : undefined,
+                                timestamp: new Date().toISOString()
+                            }]
+                        })
+                    }).catch(() => {});
+                }
+            }
+
+            function registerLoggedInEmail(email) {
+                // backward-compatible: only email, no full profile
+                const normalized = (email || '').trim().toLowerCase();
+                if (!normalized || !normalized.includes('@')) return;
+                const users = getSiteUsers();
+                if (!users[normalized]) {
+                    registerSiteUser({ email: normalized, username: normalized.split('@')[0], avatarUrl: 'etfc.png', description: '' });
+                }
+            }
+
+            function isEmailRegistered(email) {
+                const normalized = (email || '').trim().toLowerCase();
+                if (!normalized) return false;
+                if (getSiteUsers()[normalized]) return true;
+                if (getLocalAccounts().some(a => (a.email || '').toLowerCase() === normalized)) return true;
+                try {
+                    const list = JSON.parse(localStorage.getItem('logged_in_emails') || '[]');
+                    if (list.includes(normalized)) return true;
+                } catch (e) {}
+                if (getOwnerRoles().some(r => (r.email || '').toLowerCase() === normalized)) return true;
+                const hardcoded = [...(ROLE_USERS.owner || []), ...(ROLE_USERS.player || []), ...(ROLE_USERS.streamer || [])]
+                    .map(e => e.toLowerCase());
+                return hardcoded.includes(normalized);
+            }
+
+            function lookupProfileByEmail(email) {
+                const normalized = (email || '').trim().toLowerCase();
+                if (!normalized) return null;
+
+                // 1) Central registry (last saved profile from any login)
+                const siteUser = getSiteUsers()[normalized];
+                if (siteUser) {
+                    return {
+                        name: siteUser.username || normalized.split('@')[0],
+                        image: siteUser.avatarUrl || 'etfc.png',
+                        description: siteUser.description || ''
+                    };
+                }
+
+                // 2) Local email accounts
+                const local = getLocalAccounts().find(a => (a.email || '').toLowerCase() === normalized);
+                if (local) {
+                    return {
+                        name: local.username || normalized.split('@')[0],
+                        image: local.avatarUrl || 'etfc.png',
+                        description: local.description || ''
+                    };
+                }
+
+                // 3) Owner roles
+                const role = getOwnerRoles().find(r => (r.email || '').toLowerCase() === normalized);
+                if (role) {
+                    return {
+                        name: role.role || normalized.split('@')[0],
+                        image: role.image || 'etfc.png',
+                        description: role.access || ''
+                    };
+                }
+
+                // 4) Currently logged-in user
+                if ((currentUserData.email || '').toLowerCase() === normalized) {
+                    return {
+                        name: currentUserData.username || normalized.split('@')[0],
+                        image: currentUserData.avatarUrl || 'etfc.png',
+                        description: currentUserData.description || ''
+                    };
+                }
+                return null;
+            }
+
+            function saveLeaderboardPlayer(event) {
+                event.preventDefault();
+                if (currentUserData.role !== 'owner') return;
+                const email = document.getElementById('lb-email').value.trim().toLowerCase();
+                if (!email) return;
+                const nameInput = (document.getElementById('lb-name')?.value || '').trim();
+                const imageInput = (document.getElementById('lb-image')?.value || '').trim();
+                const descInput = (document.getElementById('lb-description')?.value || '').trim();
+                const rank = parseInt(document.getElementById('lb-rank').value, 10) || 0;
+                const points = parseInt(document.getElementById('lb-points').value, 10) || 0;
+                const kills = parseInt(document.getElementById('lb-kills').value, 10) || 0;
+                const wins = parseInt(document.getElementById('lb-wins').value, 10) || 0;
+                const looked = lookupProfileByEmail(email) || {};
+                const name = nameInput || looked.name || '';
+                const image = imageInput || looked.image || 'etfc.png';
+                const description = descInput || looked.description || '';
+                if (!isEmailRegistered(email) && !name) {
+                    alert('This email is not registered in THIS browser.\n\nProfiles are saved per browser (localStorage).\n\nOptions:\n1) Login once with that account on THIS browser\n2) Or type the Name manually below and save');
+                    // show manual fields
+                    const manual = document.getElementById('lb-manual-fields');
+                    if (manual) manual.classList.remove('hidden');
+                    return;
+                }
+                if (!name) {
+                    alert('Player name is required.');
+                    return;
+                }
+                const players = getLeaderboardPlayers().filter(p => p.email !== email);
+                players.push({
+                    id: crypto.randomUUID(),
+                    email,
+                    name,
+                    image,
+                    description,
+                    rank,
+                    points,
+                    kills,
+                    wins
+                });
+                // sort by rank (1 first), then points desc
+                players.sort((a, b) => {
+                    if (a.rank && b.rank && a.rank !== b.rank) return a.rank - b.rank;
+                    if (a.rank && !b.rank) return -1;
+                    if (!a.rank && b.rank) return 1;
+                    return (b.points || 0) - (a.points || 0);
+                });
+                saveOwnerCollection('leaderboard_players', players);
+                renderDashboardContent();
+            }
+
+            function editLeaderboardPlayer(id) {
+                if (currentUserData.role !== 'owner') return;
+                const players = getLeaderboardPlayers();
+                const p = players.find(x => x.id === id);
+                if (!p) return;
+                const name = prompt('Player name:', p.name);
+                if (name === null) return;
+                const description = prompt('Description:', p.description || '');
+                if (description === null) return;
+                const image = prompt('Image URL:', p.image || 'etfc.png');
+                if (image === null) return;
+                const rankStr = prompt('Top / Rank number (1 = first):', String(p.rank || ''));
+                if (rankStr === null) return;
+                const pointsStr = prompt('Points:', String(p.points || 0));
+                if (pointsStr === null) return;
+                const killsStr = prompt('Kills:', String(p.kills || 0));
+                if (killsStr === null) return;
+                const winsStr = prompt('Wins:', String(p.wins || 0));
+                if (winsStr === null) return;
+                Object.assign(p, {
+                    name: name.trim(),
+                    description: description.trim(),
+                    image: image.trim() || 'etfc.png',
+                    rank: parseInt(rankStr, 10) || 0,
+                    points: parseInt(pointsStr, 10) || 0,
+                    kills: parseInt(killsStr, 10) || 0,
+                    wins: parseInt(winsStr, 10) || 0
+                });
+                players.sort((a, b) => {
+                    if (a.rank && b.rank && a.rank !== b.rank) return a.rank - b.rank;
+                    if (a.rank && !b.rank) return -1;
+                    if (!a.rank && b.rank) return 1;
+                    return (b.points || 0) - (a.points || 0);
+                });
+                saveOwnerCollection('leaderboard_players', players);
+                renderDashboardContent();
+            }
+
+            function fillLeaderboardFromEmail() {
+                const emailEl = document.getElementById('lb-email');
+                if (!emailEl) return;
+                const email = emailEl.value.trim().toLowerCase();
+                const nameEl = document.getElementById('lb-name');
+                const imgEl = document.getElementById('lb-image');
+                const descEl = document.getElementById('lb-description');
+                const preview = document.getElementById('lb-preview');
+                const status = document.getElementById('lb-email-status');
+                const manual = document.getElementById('lb-manual-fields');
+
+                if (!email || !email.includes('@')) {
+                    if (nameEl) nameEl.value = '';
+                    if (imgEl) imgEl.value = '';
+                    if (descEl) descEl.value = '';
+                    if (preview) preview.classList.add('hidden');
+                    if (manual) manual.classList.add('hidden');
+                    if (status) { status.textContent = ''; status.className = 'text-xs mt-1'; }
+                    return;
+                }
+
+                if (!isEmailRegistered(email)) {
+                    if (preview) preview.classList.add('hidden');
+                    if (manual) manual.classList.remove('hidden');
+                    if (status) {
+                        status.textContent = 'Not found in THIS browser. Profiles are per-browser. Login once here, or fill Name/Image manually.';
+                        status.className = 'text-xs mt-1 text-amber-400 font-semibold';
+                    }
+                    return;
+                }
+
+                const looked = lookupProfileByEmail(email) || {
+                    name: email.split('@')[0],
+                    image: 'etfc.png',
+                    description: ''
+                };
+                if (nameEl) nameEl.value = looked.name || '';
+                if (imgEl) imgEl.value = looked.image || 'etfc.png';
+                if (descEl) descEl.value = looked.description || '';
+                if (manual) manual.classList.add('hidden');
+
+                if (preview) {
+                    preview.classList.remove('hidden');
+                    const pImg = document.getElementById('lb-preview-img');
+                    const pName = document.getElementById('lb-preview-name');
+                    const pDesc = document.getElementById('lb-preview-desc');
+                    if (pImg) pImg.src = looked.image || 'etfc.png';
+                    if (pName) pName.textContent = looked.name || email.split('@')[0];
+                    if (pDesc) pDesc.textContent = looked.description || email;
+                }
+                if (status) {
+                    status.textContent = 'Account found — profile loaded.';
+                    status.className = 'text-xs mt-1 text-green-400 font-semibold';
+                }
+            }
+
+            function getKnownEmailsList() {
+                const emails = new Set();
+                Object.keys(getSiteUsers()).forEach(e => emails.add(e));
+                getLocalAccounts().forEach(a => { if (a.email) emails.add(a.email.toLowerCase()); });
+                getOwnerRoles().forEach(r => { if (r.email) emails.add(r.email.toLowerCase()); });
+                return [...emails].sort();
+            }
+
+            function removeOwnerItem(key, id) {
+                if (currentUserData.role !== 'owner') return;
+                saveOwnerCollection(key, readOwnerCollection(key).filter(item => item.id !== id));
+                renderDashboardContent();
+            }
+
+            function saveOwnerMedia(event) {
+                event.preventDefault();
+                if (currentUserData.role !== 'owner') return;
+                const media = getWelcomeMedia();
+                media.push({
+                    id: crypto.randomUUID(),
+                    type: document.getElementById('media-type').value,
+                    name: document.getElementById('media-name').value.trim(),
+                    description: document.getElementById('media-description').value.trim(),
+                    url: document.getElementById('media-url').value.trim()
+                });
+                saveOwnerCollection('welcome_media', media);
+                renderDashboardContent();
+            }
+
+            function editOwnerMedia(id) {
+                if (currentUserData.role !== 'owner') return;
+                const media = getWelcomeMedia();
+                const item = media.find(entry => entry.id === id);
+                if (!item) return;
+                const type = prompt('Type: image or video', item.type);
+                if (type === null) return;
+                const name = prompt('Media name:', item.name);
+                if (name === null) return;
+                const description = prompt('Description:', item.description || '');
+                if (description === null) return;
+                const url = prompt('Image/video URL:', item.url);
+                if (url === null) return;
+                item.type = type.toLowerCase() === 'video' ? 'video' : 'image';
+                item.name = name.trim();
+                item.description = description.trim();
+                item.url = url.trim();
+                saveOwnerCollection('welcome_media', media);
+                renderDashboardContent();
+            }
+
+            function saveOwnerStreamer(event) {
+                event.preventDefault();
+                if (currentUserData.role !== 'owner') return;
+                const streamers = getCustomStreamers();
+                streamers.push({
+                    id: crypto.randomUUID(),
+                    name: document.getElementById('streamer-name').value.trim(),
+                    image: document.getElementById('streamer-image').value.trim() || 'etfc.png',
+                    description: document.getElementById('streamer-description').value.trim(),
+                    socials: {
+                        instagram: document.getElementById('streamer-instagram').value.trim(),
+                        tiktok: document.getElementById('streamer-tiktok').value.trim(),
+                        youtube: document.getElementById('streamer-youtube').value.trim(),
+                        kick: document.getElementById('streamer-kick').value.trim()
+                    }
+                });
+                saveOwnerCollection('custom_streamers', streamers);
+                renderDashboardContent();
+            }
+
+            function editOwnerStreamer(id) {
+                if (currentUserData.role !== 'owner') return;
+                const streamers = getCustomStreamers();
+                const streamer = streamers.find(item => item.id === id);
+                if (!streamer) return;
+                const name = prompt('Streamer name:', streamer.name);
+                if (name === null) return;
+                const description = prompt('Description:', streamer.description || '');
+                if (description === null) return;
+                const image = prompt('Image URL:', streamer.image || 'etfc.png');
+                if (image === null) return;
+                const instagram = prompt('Instagram URL:', streamer.socials.instagram || '');
+                if (instagram === null) return;
+                const tiktok = prompt('TikTok URL:', streamer.socials.tiktok || '');
+                if (tiktok === null) return;
+                const youtube = prompt('YouTube URL:', streamer.socials.youtube || '');
+                if (youtube === null) return;
+                const kick = prompt('Kick URL:', streamer.socials.kick || '');
+                if (kick === null) return;
+                Object.assign(streamer, { name: name.trim(), description: description.trim(), image: image.trim() || 'etfc.png', socials: { instagram: instagram.trim(), tiktok: tiktok.trim(), youtube: youtube.trim(), kick: kick.trim() } });
+                saveOwnerCollection('custom_streamers', streamers);
+                renderDashboardContent();
+            }
+
+            function setupBuiltInStreamerControls() {
+                if (currentUserData.role !== 'owner') return;
+                let hidden = readOwnerCollection('hidden_streamers');
+                let overrides = JSON.parse(localStorage.getItem('streamer_overrides') || '{}');
+                document.querySelectorAll('#dashboard-content .grid > div').forEach(card => {
+                    const title = card.querySelector('h3');
+                    const image = card.querySelector('img');
+                    if (!title || card.querySelector('.owner-streamer-tools')) return;
+                    const originalName = title.textContent.trim();
+                    if (hidden.includes(originalName)) {
+                        card.classList.add('hidden');
+                        return;
+                    }
+                    const override = overrides[originalName] || {};
+                    if (override.name) title.textContent = override.name;
+                    if (override.image && image) image.src = override.image;
+                    const tools = document.createElement('div');
+                    tools.className = 'owner-streamer-tools flex gap-2 pt-2';
+                    tools.innerHTML = `<button type="button" class="flex-1 bg-yellow-500 text-black py-2 rounded-xl text-xs font-black">Edit</button><button type="button" class="flex-1 bg-red-950 text-red-200 py-2 rounded-xl text-xs font-black">Delete</button>`;
+                    tools.children[0].onclick = () => {
+                        const name = prompt('Streamer name:', title.textContent.trim());
+                        if (name === null) return;
+                        const imageUrl = prompt('Image URL:', image?.src || '');
+                        if (imageUrl === null) return;
+                        overrides[originalName] = { name: name.trim(), image: imageUrl.trim() };
+                        localStorage.setItem('streamer_overrides', JSON.stringify(overrides));
+                        setupBuiltInStreamerControls();
+                        renderDashboardContent();
+                    };
+                    tools.children[1].onclick = () => {
+                        if (!confirm(`Delete ${title.textContent.trim()}?`)) return;
+                        hidden.push(originalName);
+                        saveOwnerCollection('hidden_streamers', hidden);
+                        card.classList.add('hidden');
+                    };
+                    card.appendChild(tools);
+                });
+            }
+
+            function saveOwnerTournament(event) {
+                event.preventDefault();
+                if (currentUserData.role !== 'owner') return;
+                const tournaments = getCustomTournaments();
+                tournaments.push({
+                    id: crypto.randomUUID(),
+                    title: document.getElementById('tournament-name').value.trim(),
+                    description: document.getElementById('tournament-description').value.trim(),
+                    prize: document.getElementById('tournament-prize').value.trim()
+                });
+                saveOwnerCollection('custom_tournaments', tournaments);
+                renderDashboardContent();
+            }
+
+            function saveOwnerRole(event) {
+                event.preventDefault();
+                if (currentUserData.role !== 'owner') return;
+                const roles = getOwnerRoles().filter(item => item.email !== document.getElementById('role-email').value.trim().toLowerCase());
+                roles.push({
+                    id: crypto.randomUUID(),
+                    email: document.getElementById('role-email').value.trim().toLowerCase(),
+                    role: document.getElementById('role-name').value.trim(),
+                    access: document.getElementById('role-access').value.trim(),
+                    color: document.getElementById('role-color').value,
+                    image: document.getElementById('role-image').value.trim() || 'etfc.png'
+                });
+                saveOwnerCollection('owner_roles', roles);
+                renderDashboardContent();
+            }
+
+            function saveSiteSettings(event) {
+                event.preventDefault();
+                if (currentUserData.role !== 'owner') return;
+                const settings = {
+                    siteName: document.getElementById('site-name-setting').value.trim() || 'Tunisia Fortnite',
+                    welcomeText: document.getElementById('welcome-text-setting').value.trim(),
+                    tournamentTitle: document.getElementById('tournament-title-setting').value.trim()
+                };
+                localStorage.setItem('site_settings', JSON.stringify(settings));
+                document.title = settings.siteName;
+                renderDashboard();
+            }
+
+            function getRoleForEmail(email) {
+                const normalizedEmail = (email || '').trim().toLowerCase();
+                const customRole = getOwnerRoles().find(item => item.email === normalizedEmail);
+                if (customRole) return customRole.role;
+                if (ROLE_USERS.owner.map(item => item.toLowerCase()).includes(normalizedEmail)) return 'owner';
+                if (ROLE_USERS.streamer.map(item => item.toLowerCase()).includes(normalizedEmail)) return 'streamer';
+                if (ROLE_USERS.player.map(item => item.toLowerCase()).includes(normalizedEmail)) return 'player';
+                return 'member';
+            }
+
+            function roleIcon(role) {
+                const icons = { owner: 'fa-crown', streamer: 'fa-video', player: 'fa-gamepad', member: 'fa-user' };
+                const customRole = getOwnerRoles().find(item => item.role.toLowerCase() === role.toLowerCase());
+                const icon = icons[role] || icons.member;
+                const color = customRole?.color || '#E71D36';
+                return `<i class="fas ${icon} ml-1" style="color:${color}" title="${role}${customRole?.access ? `: ${customRole.access}` : ''}"></i>`;
+            }
+
+            function displayNameWithRole(user = currentUserData) {
+                return `${user.username || 'Member'} ${roleIcon(user.role || getRoleForEmail(user.email))}`;
             }
 
             async function hashPassword(password) {
@@ -167,8 +744,10 @@
                     avatarUrl: account.avatarUrl || 'etfc.png',
                     description: account.description || '',
                     email: account.email,
-                    provider: 'email'
+                    provider: 'email',
+                    role: getRoleForEmail(account.email)
                 };
+                registerSiteUser(currentUserData);
             }
 
             function getProfileOverrides() {
@@ -183,6 +762,76 @@
                 if (!email || !email.includes('@')) return email || 'Discord Connected Account';
                 const [name, domain] = email.split('@');
                 return `${name.slice(0, 2)}***@${domain}`;
+            }
+
+            function getLinkedAccounts() {
+                try {
+                    return JSON.parse(localStorage.getItem('linked_accounts') || '{}');
+                } catch (error) {
+                    return {};
+                }
+            }
+
+            function setLinkedAccount(provider, profile) {
+                const linked = getLinkedAccounts();
+                linked[provider] = profile;
+                localStorage.setItem('linked_accounts', JSON.stringify(linked));
+            }
+
+            function unlinkAccount(provider) {
+                const linked = getLinkedAccounts();
+                delete linked[provider];
+                localStorage.setItem('linked_accounts', JSON.stringify(linked));
+                renderDashboardContent();
+            }
+
+            function linkAccount(provider) {
+                if (currentUserData.provider === provider) {
+                    setLinkedAccount(provider, {
+                        username: currentUserData.username,
+                        avatarUrl: currentUserData.avatarUrl,
+                        email: currentUserData.email || ''
+                    });
+                    renderDashboardContent();
+                    return;
+                }
+                if (provider === 'discord') loginWithDiscord('link');
+                if (provider === 'google') loginWithGoogle('link');
+                if (provider === 'epic') window.location.href = '/api/auth/epic/login?mode=link';
+            }
+
+            function renderLinkedAccount(provider, label, icon) {
+                const linked = getLinkedAccounts()[provider];
+                return `
+                    <div class="flex items-center justify-between gap-3 bg-zinc-900/80 border border-zinc-800 rounded-2xl px-4 py-3">
+                        <div class="flex items-center gap-3 min-w-0">
+                            <i class="${icon} text-xl text-tunisiaRed"></i>
+                            <div class="min-w-0">
+                                <p class="font-bold text-white">${label}</p>
+                                <p class="text-xs text-zinc-400 truncate">${linked ? (linked.email || linked.username || 'Linked') : 'Not linked'}</p>
+                            </div>
+                        </div>
+                        ${linked
+                            ? `<button type="button" onclick="unlinkAccount('${provider}')" class="text-xs font-bold text-red-300 hover:text-white px-3 py-2 rounded-lg border border-red-500/40">Unlink</button>`
+                            : `<button type="button" onclick="linkAccount('${provider}')" class="text-xs font-bold text-white bg-tunisiaRed hover:bg-red-700 px-3 py-2 rounded-lg">Link</button>`}
+                    </div>
+                `;
+            }
+
+            function renderCustomStreamerCards() {
+                return getCustomStreamers().map(streamer => `
+                    <div class="bg-zinc-950/95 backdrop-blur-xl border border-tunisiaRed/40 rounded-3xl p-6 text-center space-y-5 shadow-neon relative overflow-hidden flex flex-col justify-between">
+                        <div class="w-24 h-24 mx-auto rounded-3xl bg-zinc-900 border-2 border-tunisiaRed overflow-hidden shadow-neon flex items-center justify-center"><img src="${streamer.image}" alt="${streamer.name}" class="w-full h-full object-cover"></div>
+                        <div><h3 class="font-black text-2xl text-white tracking-wide">${streamer.name}</h3><p class="text-zinc-400 text-sm mt-1">${streamer.description || 'Community streamer'}</p></div>
+                        <div class="grid grid-cols-2 gap-2 pt-2">
+                            ${streamer.socials.instagram ? `<a href="${streamer.socials.instagram}" target="_blank" class="bg-zinc-900 text-white py-3 rounded-xl text-xs font-bold border border-zinc-700"><i class="fab fa-instagram mr-1"></i>Instagram</a>` : ''}
+                            ${streamer.socials.tiktok ? `<a href="${streamer.socials.tiktok}" target="_blank" class="bg-zinc-900 text-white py-3 rounded-xl text-xs font-bold border border-zinc-700"><i class="fab fa-tiktok mr-1"></i>TikTok</a>` : ''}
+                            ${streamer.socials.youtube ? `<a href="${streamer.socials.youtube}" target="_blank" class="bg-red-600 text-white py-3 rounded-xl text-xs font-bold"><i class="fab fa-youtube mr-1"></i>YouTube</a>` : ''}
+                            ${streamer.socials.kick ? `<a href="${streamer.socials.kick}" target="_blank" class="bg-zinc-900 text-white py-3 rounded-xl text-xs font-bold border border-kickGreen/40">KICK</a>` : ''}
+                        </div>
+                        ${currentUserData.role === 'owner' ? `<div class="flex gap-2 pt-2"><button type="button" onclick="editOwnerStreamer('${streamer.id}')" class="flex-1 bg-yellow-500 text-black py-2 rounded-xl text-xs font-black">Edit</button><button type="button" onclick="removeOwnerItem('custom_streamers','${streamer.id}')" class="flex-1 bg-red-950 text-red-200 py-2 rounded-xl text-xs font-black">Delete</button></div>` : ''}
+                    </div>
+                `).join('');
             }
 
             function removeProfileImage() {
@@ -202,7 +851,24 @@
                 preview.src = URL.createObjectURL(file);
             }
 
+            function bootstrapSiteUsersFromLocalAccounts() {
+                const accounts = getLocalAccounts();
+                accounts.forEach(acc => {
+                    if (acc.email) {
+                        registerSiteUser({
+                            email: acc.email,
+                            username: acc.username,
+                            avatarUrl: acc.avatarUrl || 'etfc.png',
+                            description: acc.description || '',
+                            provider: 'email'
+                        });
+                    }
+                });
+            }
+
             window.addEventListener('DOMContentLoaded', async () => {
+                bootstrapSiteUsersFromLocalAccounts();
+
                 const hash = window.location.hash;
                 const savedUser = localStorage.getItem('discord_username');
                 const savedAvatar = localStorage.getItem('discord_avatar');
@@ -216,7 +882,9 @@
                 const savedEpicDescription = localStorage.getItem('epic_description');
                 const savedDiscordAccountKey = localStorage.getItem('discord_account_key') || savedUser;
                 const savedGoogleAccountKey = localStorage.getItem('google_account_key') || savedGoogleUser;
-                const epicCallback = new URLSearchParams(window.location.search).get('epic');
+                const callbackParams = new URLSearchParams(window.location.search);
+                const epicCallback = callbackParams.get('epic');
+                const linkCallback = callbackParams.get('linked');
 
                 if (epicCallback === '1') {
                     try {
@@ -226,7 +894,14 @@
                         localStorage.setItem('epic_username', profile.username);
                         localStorage.setItem('epic_avatar', profile.avatarUrl || 'etfc.png');
                         localStorage.setItem('epic_description', profile.description || '');
-                        currentUserData = { ...profile, provider: 'epic' };
+                        if (linkCallback === 'epic') {
+                            setLinkedAccount('epic', profile);
+                            window.history.replaceState({}, document.title, window.location.pathname);
+                            renderDashboard();
+                            return;
+                        }
+                        currentUserData = { ...profile, provider: 'epic', role: getRoleForEmail(profile.email) };
+                        registerSiteUser(currentUserData);
                         window.history.replaceState({}, document.title, window.location.pathname);
                         renderDashboard();
                     } catch (error) {
@@ -236,7 +911,9 @@
                 } else if (hash.includes('access_token')) {
                     const params = new URLSearchParams(hash.substring(1));
                     const accessToken = params.get('access_token');
-                    const provider = params.get('state') === 'google' ? 'google' : 'discord';
+                        const state = params.get('state') || '';
+                        const provider = state.includes('google') ? 'google' : 'discord';
+                        const linking = state.startsWith('link:');
                     renderLoadingState();
 
                     try {
@@ -257,7 +934,15 @@
                         window.history.replaceState({}, document.title, window.location.pathname);
                         const accountKey = userData.id || username;
                         const override = getProfileOverrides()[`${provider}:${accountKey}`] || {};
-                        currentUserData = { username: override.username || username, avatarUrl: override.avatarUrl || avatarUrl, description: override.description || '', email: provider === 'google' ? (userData.email || '') : '', provider };
+                        const profile = { username, avatarUrl, email: provider === 'google' ? (userData.email || '') : '' };
+                        if (linking) {
+                            setLinkedAccount(provider, profile);
+                            window.history.replaceState({}, document.title, window.location.pathname);
+                            renderDashboard();
+                            return;
+                        }
+                        currentUserData = { username: override.username || username, avatarUrl: override.avatarUrl || avatarUrl, description: override.description || '', email: profile.email, provider, role: getRoleForEmail(profile.email) };
+                        registerSiteUser(currentUserData);
                         renderDashboard();
                     } catch (error) {
                         console.error(`Failed to fetch ${provider} profile:`, error);
@@ -265,35 +950,38 @@
                     }
                 } else if (savedUser) {
                     const override = getProfileOverrides()[`discord:${savedDiscordAccountKey}`] || {};
-                    currentUserData = { username: override.username || savedUser, avatarUrl: override.avatarUrl || savedAvatar || 'etfc.png', description: override.description || '', email: '', provider: 'discord' };
+                    currentUserData = { username: override.username || savedUser, avatarUrl: override.avatarUrl || savedAvatar || 'etfc.png', description: override.description || '', email: savedUser, provider: 'discord', role: getRoleForEmail(savedUser) };
                     renderDashboard();
                 } else if (savedEmailUser) {
-                    currentUserData = { username: savedEmailUser, avatarUrl: savedEmailAvatar || 'etfc.png', description: savedEmailDescription || '', email: savedEmail || '', provider: 'email' };
+                    currentUserData = { username: savedEmailUser, avatarUrl: savedEmailAvatar || 'etfc.png', description: savedEmailDescription || '', email: savedEmail || '', provider: 'email', role: getRoleForEmail(savedEmail) };
+                    registerSiteUser(currentUserData);
                     renderDashboard();
                 } else if (savedGoogleUser) {
                     const override = getProfileOverrides()[`google:${savedGoogleAccountKey}`] || {};
-                    currentUserData = { username: override.username || savedGoogleUser, avatarUrl: override.avatarUrl || localStorage.getItem('google_avatar') || 'etfc.png', description: override.description || '', email: '', provider: 'google' };
+                    currentUserData = { username: override.username || savedGoogleUser, avatarUrl: override.avatarUrl || localStorage.getItem('google_avatar') || 'etfc.png', description: override.description || '', email: savedGoogleUser, provider: 'google', role: getRoleForEmail(savedGoogleUser) };
+                    registerSiteUser(currentUserData);
                     renderDashboard();
                 } else if (savedEpicUser) {
-                    currentUserData = { username: savedEpicUser, avatarUrl: savedEpicAvatar || 'etfc.png', description: savedEpicDescription || '', email: '', provider: 'epic' };
+                    currentUserData = { username: savedEpicUser, avatarUrl: savedEpicAvatar || 'etfc.png', description: savedEpicDescription || '', email: savedEpicUser, provider: 'epic', role: getRoleForEmail(savedEpicUser) };
                     renderDashboard();
                 } else {
                     renderLoggedOutState();
                 }
             });
 
-            function loginWithDiscord() {
+            function loginWithDiscord(mode = 'login') {
                 const params = new URLSearchParams({
                     client_id: CLIENT_ID,
                     redirect_uri: REDIRECT_URI,
                     response_type: 'token',
-                    scope: 'identify'
+                    scope: 'identify',
+                    state: mode === 'link' ? 'link:discord' : 'login:discord'
                 });
                 const discordAuthUrl = `https://discord.com/api/oauth2/authorize?${params.toString()}`;
                 window.location.href = discordAuthUrl;
             }
 
-            function loginWithGoogle() {
+            function loginWithGoogle(mode = 'login') {
                 if (!GOOGLE_CLIENT_ID) {
                     alert('Google login needs a Google OAuth client ID in the page configuration.');
                     return;
@@ -303,13 +991,13 @@
                     redirect_uri: REDIRECT_URI,
                     response_type: 'token',
                     scope: 'openid email profile',
-                    state: 'google'
+                    state: mode === 'link' ? 'link:google' : 'google'
                 });
                 window.location.href = `https://accounts.google.com/o/oauth2/v2/auth?${params.toString()}`;
             }
 
-            function loginWithEpicGames() {
-                window.location.href = '/api/auth/epic/login';
+            function loginWithEpicGames(mode = 'login') {
+                window.location.href = `/api/auth/epic/login${mode === 'link' ? '?mode=link' : ''}`;
             }
 
             function togglePasswordVisibility(inputId, buttonId) {
@@ -447,6 +1135,7 @@
                     localStorage.setItem('profile_overrides', JSON.stringify(overrides));
                     currentUserData = { ...currentUserData, ...profile };
                 }
+                registerSiteUser(currentUserData);
                 renderDashboard();
             }
 
@@ -514,11 +1203,27 @@
                 if (!menu || !button) return;
                 const isClosed = menu.classList.contains('pointer-events-none');
                 if (isClosed) {
+                    // Open
                     menu.classList.remove('pointer-events-none', 'invisible', 'opacity-0', '-translate-y-2', 'scale-95', 'max-h-0');
                     menu.classList.add('opacity-100', 'translate-y-0', 'scale-100', 'max-h-[70vh]');
                     button.setAttribute('aria-expanded', 'true');
                 } else {
-                    closeMenu();
+                    // Close with delay so items can animate out
+                    const items = menu.querySelectorAll('.nav-btn, button');
+                    items.forEach(item => {
+                        item.style.opacity = '0';
+                        item.style.transform = 'translateY(-8px)';
+                    });
+                    setTimeout(() => {
+                        menu.classList.remove('opacity-100', 'translate-y-0', 'scale-100', 'max-h-[70vh]');
+                        menu.classList.add('pointer-events-none', 'invisible', 'opacity-0', '-translate-y-2', 'scale-95', 'max-h-0');
+                        button.setAttribute('aria-expanded', 'false');
+                        // reset for next open
+                        items.forEach(item => {
+                            item.style.opacity = '';
+                            item.style.transform = '';
+                        });
+                    }, 280);
                 }
             }
 
@@ -526,9 +1231,21 @@
                 const menu = document.getElementById('main-menu');
                 const button = document.getElementById('menu-toggle');
                 if (!menu || !button) return;
-                menu.classList.remove('opacity-100', 'translate-y-0', 'scale-100', 'max-h-[70vh]');
-                menu.classList.add('pointer-events-none', 'invisible', 'opacity-0', '-translate-y-2', 'scale-95', 'max-h-0');
-                button.setAttribute('aria-expanded', 'false');
+                if (menu.classList.contains('pointer-events-none')) return;
+                const items = menu.querySelectorAll('.nav-btn, button');
+                items.forEach(item => {
+                    item.style.opacity = '0';
+                    item.style.transform = 'translateY(-8px)';
+                });
+                setTimeout(() => {
+                    menu.classList.remove('opacity-100', 'translate-y-0', 'scale-100', 'max-h-[70vh]');
+                    menu.classList.add('pointer-events-none', 'invisible', 'opacity-0', '-translate-y-2', 'scale-95', 'max-h-0');
+                    button.setAttribute('aria-expanded', 'false');
+                    items.forEach(item => {
+                        item.style.opacity = '';
+                        item.style.transform = '';
+                    });
+                }, 280);
             }
 
             function toggleDiscordButton() {
@@ -545,6 +1262,13 @@
             }
 
             function renderDashboard() {
+                if (currentUserData.provider && currentUserData.provider !== 'email') {
+                    setLinkedAccount(currentUserData.provider, {
+                        username: currentUserData.username,
+                        avatarUrl: currentUserData.avatarUrl,
+                        email: currentUserData.email || ''
+                    });
+                }
                 const app = document.getElementById('app');
                 app.className = "w-full min-h-screen flex flex-col";
                 app.innerHTML = `
@@ -564,7 +1288,7 @@
                             <nav id="main-menu" class="pointer-events-none invisible opacity-0 -translate-y-2 scale-95 max-h-0 overflow-y-auto transition-all duration-300 ease-out absolute right-0 top-14 w-64 p-2 bg-zinc-950/95 backdrop-blur-xl border border-tunisiaRed/40 rounded-2xl shadow-neon z-50">
                                 <button onclick="switchTab('account')" class="w-full flex items-center gap-3 px-4 py-3 mb-2 rounded-xl bg-tunisiaRed/10 hover:bg-tunisiaRed/20 text-left transition-all">
                                     <img src="${currentUserData.avatarUrl}" alt="Profile" class="w-8 h-8 rounded-lg object-cover border border-tunisiaRed/40">
-                                    <span class="text-sm font-bold text-white">${currentUserData.username || 'Guest Mode'}</span>
+                                    <span class="text-sm font-bold text-white">${displayNameWithRole()}</span>
                                 </button>
                                 <div class="mb-2 border-t border-zinc-800"></div>
                                 <button onclick="switchTab('welcome')" id="nav-welcome" class="nav-btn w-full text-left px-4 py-2.5 rounded-xl text-sm font-semibold transition-all duration-200">Welcome</button>
@@ -579,6 +1303,8 @@
                                 <button onclick="switchTab('players')" id="nav-players" class="nav-btn w-full text-left px-4 py-2.5 rounded-xl text-sm font-semibold transition-all duration-200">Players</button>
                                 <button onclick="switchTab('check-in')" id="nav-check-in" class="nav-btn w-full text-left px-4 py-2.5 rounded-xl text-sm font-semibold transition-all duration-200">Check In</button>
                                 <button onclick="switchTab('rulebook')" id="nav-rulebook" class="nav-btn w-full text-left px-4 py-2.5 rounded-xl text-sm font-semibold transition-all duration-200">Rulebook</button>
+                                <button onclick="switchTab('shop')" id="nav-shop" class="nav-btn w-full text-left px-4 py-2.5 rounded-xl text-sm font-semibold transition-all duration-200">Shop</button>
+                                ${currentUserData.role === 'owner' ? '<button onclick="switchTab(\'owner-studio\')" id="nav-owner-studio" class="nav-btn w-full text-left px-4 py-2.5 rounded-xl text-sm font-semibold transition-all duration-200 text-yellow-300"><i class="fas fa-crown mr-2"></i>Owner Studio</button>' : ''}
                                 <div class="my-2 border-t border-zinc-800"></div>
                                 <button onclick="switchTab('discord')" id="nav-discord" class="nav-btn w-full text-left px-4 py-2.5 rounded-xl text-sm font-semibold transition-all duration-200 flex items-center space-x-2">
                                     <i class="fab fa-discord text-tunisiaRed"></i>
@@ -761,6 +1487,7 @@
 
             function renderDashboardContent() {
                 clearWelcomeTimers();
+                const siteSettings = getSiteSettings();
                 document.querySelectorAll('.nav-btn').forEach(btn => {
                     btn.className = "nav-btn w-full text-left px-4 py-2.5 rounded-xl text-sm font-semibold transition-all duration-200 text-zinc-400 hover:text-white hover:bg-zinc-900/60";
                 });
@@ -788,13 +1515,14 @@
                                             Welcome Back
                                         </h1>
                                         <p class="text-3xl sm:text-4xl font-extrabold bg-gradient-to-r from-tunisiaRed to-red-600 bg-clip-text text-transparent mt-3 tracking-wide drop-shadow">
-                                            ${currentUserData.username}
+                                            ${displayNameWithRole()}
                                         </p>
                                     </div>
                                     <p class="text-zinc-700 max-w-lg mx-auto text-base relative z-10 font-bold bg-white/60 backdrop-blur-md px-6 py-3 rounded-2xl shadow-sm border border-zinc-200 mt-6">
-                                        You are officially connected to the Tunisia Fortnite Community Hub. Check out upcoming tournaments or register your squad now!
+                                        ${siteSettings.welcomeText}
                                     </p>
                                 </div>
+                            ${getWelcomeMedia().length ? `<div class="w-full max-w-4xl grid grid-cols-1 md:grid-cols-2 gap-5 relative z-10">${getWelcomeMedia().map(item => item.type === 'video' ? `<article class="bg-zinc-950/90 rounded-2xl overflow-hidden border border-tunisiaRed/40"><video src="${item.url}" controls class="w-full aspect-video object-cover"></video><div class="p-4 text-left"><h3 class="font-bold text-white">${item.name}</h3><p class="text-sm text-zinc-400">${item.description}</p>${currentUserData.role === 'owner' ? `<div class="flex gap-2 mt-3"><button type="button" onclick="editOwnerMedia('${item.id}')" class="bg-yellow-500 text-black px-3 py-2 rounded-lg text-xs font-black">Edit</button><button type="button" onclick="removeOwnerItem('welcome_media','${item.id}')" class="bg-red-950 text-red-200 px-3 py-2 rounded-lg text-xs font-black">Delete</button></div>` : ''}</div></article>` : `<article class="bg-zinc-950/90 rounded-2xl overflow-hidden border border-tunisiaRed/40"><img src="${item.url}" alt="${item.name}" class="w-full aspect-video object-cover"><div class="p-4 text-left"><h3 class="font-bold text-white">${item.name}</h3><p class="text-sm text-zinc-400">${item.description}</p>${currentUserData.role === 'owner' ? `<div class="flex gap-2 mt-3"><button type="button" onclick="editOwnerMedia('${item.id}')" class="bg-yellow-500 text-black px-3 py-2 rounded-lg text-xs font-black">Edit</button><button type="button" onclick="removeOwnerItem('welcome_media','${item.id}')" class="bg-red-950 text-red-200 px-3 py-2 rounded-lg text-xs font-black">Delete</button></div>` : ''}</div></article>`).join('')}</div>` : ''}
                                 
                                 <!-- Slideshow Section (appears after 4 seconds with animation) -->
                                 <div id="slideshow-container" class="hidden opacity-0 transition-all duration-700 w-full max-w-3xl relative z-10">
@@ -847,11 +1575,38 @@
                                         <span class="absolute inset-0 flex items-center justify-center bg-black/60 text-white opacity-0 group-hover:opacity-100 transition"><i class="fas fa-camera"></i></span>
                                     </button>
                                     <div>
-                                        <h3 class="text-xl font-bold text-white">${currentUserData.username}</h3>
+                                        <h3 class="text-xl font-bold text-white">${displayNameWithRole()}</h3>
                                         <p class="text-zinc-400 text-sm">${maskEmail(currentUserData.email)}</p>
                                         <p class="text-zinc-400 text-sm mt-1">${currentUserData.description || 'No description yet.'}</p>
                                     </div>
                                 </div>
+                                <div class="space-y-3 border-t border-zinc-800 pt-5 text-left">
+                                    <div>
+                                        <h3 class="text-lg font-bold text-white">Linked Accounts</h3>
+                                        <p class="text-xs text-zinc-400 mt-1">Connect or disconnect your sign-in providers.</p>
+                                    </div>
+                                    ${renderLinkedAccount('discord', 'Discord', 'fab fa-discord')}
+                                    ${renderLinkedAccount('google', 'Google', 'fab fa-google')}
+                                    ${renderLinkedAccount('epic', 'Epic Games', 'fas fa-gamepad')}
+                                </div>
+                                ${currentUserData.role === 'owner' ? `
+                                    <div class="border border-yellow-500/30 bg-yellow-500/10 rounded-2xl p-4 text-left">
+                                        <h3 class="font-bold text-yellow-300"><i class="fas fa-crown mr-2"></i>Owner Controls</h3>
+                                        <p class="text-xs text-zinc-300 mt-1">Edit the visible website content below. Changes are saved in this browser.</p>
+                                        <form onsubmit="saveSiteSettings(event)" class="space-y-3 mt-4">
+                                            <label class="block text-xs font-bold text-zinc-300">Site name
+                                                <input id="site-name-setting" value="${getSiteSettings().siteName}" required class="mt-1 w-full bg-zinc-950 border border-zinc-800 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-tunisiaRed">
+                                            </label>
+                                            <label class="block text-xs font-bold text-zinc-300">Welcome text
+                                                <textarea id="welcome-text-setting" rows="3" class="mt-1 w-full bg-zinc-950 border border-zinc-800 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-tunisiaRed">${getSiteSettings().welcomeText}</textarea>
+                                            </label>
+                                            <label class="block text-xs font-bold text-zinc-300">Tournament title
+                                                <input id="tournament-title-setting" value="${getSiteSettings().tournamentTitle}" required class="mt-1 w-full bg-zinc-950 border border-zinc-800 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-tunisiaRed">
+                                            </label>
+                                            <button type="submit" class="w-full bg-yellow-500 hover:bg-yellow-400 text-black px-4 py-2 rounded-xl font-black text-sm transition">Save Website Changes</button>
+                                        </form>
+                                    </div>
+                                ` : ''}
                                 <form onsubmit="saveAccountChanges(event)" class="space-y-4 text-left border-t border-zinc-800 pt-5">
                                     <label class="block text-sm font-semibold text-zinc-300">Account name
                                         <input id="profile-name" value="${currentUserData.username}" required class="mt-1 w-full bg-zinc-900 border border-zinc-800 rounded-2xl px-4 py-3 text-white focus:outline-none focus:border-tunisiaRed transition">
@@ -873,34 +1628,163 @@
                             </div>
                         `;
                         break;
-                    case 'tournaments':
+                    case 'owner-studio':
+                        if (currentUserData.role !== 'owner') {
+                            contentContainer.innerHTML = '<p class="text-red-400 font-bold">Owner access required.</p>';
+                            break;
+                        }
                         contentContainer.innerHTML = `
-                            <div class="w-full space-y-6 animate-welcome py-6 max-w-xl mx-auto">
-                                <h2 class="text-3xl font-black uppercase tracking-wide text-center text-zinc-900 drop-shadow-sm">Active Tournament</h2>
-                                <div class="bg-zinc-950/95 backdrop-blur-xl border border-tunisiaRed/40 rounded-3xl p-8 space-y-6 shadow-neon text-center relative overflow-hidden group">
-                                    <div class="absolute inset-0 bg-gradient-to-b from-tunisiaRed/5 to-transparent pointer-events-none"></div>
-                                    <div class="inline-block px-4 py-1.5 bg-tunisiaRed/25 text-tunisiaRed text-xs font-black uppercase tracking-wider rounded-xl border border-tunisiaRed/40 shadow-neon-sm">Duo Reload</div>
-                                    <h3 class="text-2xl sm:text-3xl font-black text-white">Duo reload simpsons map</h3>
-                                    <div class="bg-zinc-900/90 border border-tunisiaRed/20 py-4 px-6 rounded-2xl shadow-inner">
-                                        <p class="text-xs uppercase tracking-widest text-zinc-400 font-bold">Prize Pool</p>
-                                        <p class="text-3xl font-black bg-gradient-to-r from-tunisiaRed to-red-400 bg-clip-text text-transparent mt-1">6,400 V-bucks</p>
-                                    </div>
-                                    <p class="text-zinc-300 text-sm font-medium">Grab your duo partner and compete in the custom Simpsons map reload tournament!</p>
+                            <div class="w-full max-w-4xl space-y-6 animate-welcome pb-10">
+                                <h2 class="text-3xl font-black uppercase tracking-wide text-center text-yellow-300"><i class="fas fa-crown mr-2"></i>Owner Studio</h2>
+                                <div class="grid lg:grid-cols-3 gap-5">
+                                    <section class="bg-zinc-950/95 border border-tunisiaRed/40 rounded-3xl p-5 shadow-neon">
+                                        <h3 class="font-black text-white mb-3">Welcome Media</h3>
+                                        <form onsubmit="saveOwnerMedia(event)" class="space-y-3">
+                                            <select id="media-type" class="w-full bg-zinc-900 border border-zinc-800 rounded-xl px-3 py-2 text-white"><option value="image">Image</option><option value="video">Video</option></select>
+                                            <input id="media-name" required placeholder="Media name" class="w-full bg-zinc-900 border border-zinc-800 rounded-xl px-3 py-2 text-white">
+                                            <textarea id="media-description" placeholder="Description" class="w-full bg-zinc-900 border border-zinc-800 rounded-xl px-3 py-2 text-white"></textarea>
+                                            <input id="media-url" type="url" required placeholder="Image/video URL" class="w-full bg-zinc-900 border border-zinc-800 rounded-xl px-3 py-2 text-white">
+                                            <button class="w-full bg-tunisiaRed text-white rounded-xl py-2 font-bold">Add Media</button>
+                                        </form>
+                                        <div class="space-y-2 mt-4">${getWelcomeMedia().map(item => `<div class="flex justify-between gap-2 text-xs text-zinc-300"><span>${item.name} (${item.type})</span><span class="flex gap-2"><button type="button" onclick="editOwnerMedia('${item.id}')" class="text-yellow-300">Edit</button><button type="button" onclick="removeOwnerItem('welcome_media','${item.id}')" class="text-red-300">Delete</button></span></div>`).join('')}</div>
+                                    </section>
+                                    <section class="bg-zinc-950/95 border border-tunisiaRed/40 rounded-3xl p-5 shadow-neon">
+                                        <h3 class="font-black text-white mb-3">Streamers</h3>
+                                        <form onsubmit="saveOwnerStreamer(event)" class="space-y-3">
+                                            <input id="streamer-name" required placeholder="Streamer name" class="w-full bg-zinc-900 border border-zinc-800 rounded-xl px-3 py-2 text-white">
+                                            <input id="streamer-image" type="url" placeholder="Image URL" class="w-full bg-zinc-900 border border-zinc-800 rounded-xl px-3 py-2 text-white">
+                                            <input id="streamer-description" placeholder="Description" class="w-full bg-zinc-900 border border-zinc-800 rounded-xl px-3 py-2 text-white">
+                                            <input id="streamer-instagram" type="url" placeholder="Instagram URL" class="w-full bg-zinc-900 border border-zinc-800 rounded-xl px-3 py-2 text-white">
+                                            <input id="streamer-tiktok" type="url" placeholder="TikTok URL" class="w-full bg-zinc-900 border border-zinc-800 rounded-xl px-3 py-2 text-white">
+                                            <input id="streamer-youtube" type="url" placeholder="YouTube URL" class="w-full bg-zinc-900 border border-zinc-800 rounded-xl px-3 py-2 text-white">
+                                            <input id="streamer-kick" type="url" placeholder="Kick URL" class="w-full bg-zinc-900 border border-zinc-800 rounded-xl px-3 py-2 text-white">
+                                            <button class="w-full bg-tunisiaRed text-white rounded-xl py-2 font-bold">Add Streamer</button>
+                                        </form>
+                                        <div class="space-y-2 mt-4">${getCustomStreamers().map(item => `<div class="flex justify-between gap-2 text-xs text-zinc-300"><span>${item.name}</span><span class="flex gap-2"><button type="button" onclick="editOwnerStreamer('${item.id}')" class="text-yellow-300">Edit</button><button type="button" onclick="removeOwnerItem('custom_streamers','${item.id}')" class="text-red-300">Delete</button></span></div>`).join('')}</div>
+                                    </section>
+                                    <section class="bg-zinc-950/95 border border-tunisiaRed/40 rounded-3xl p-5 shadow-neon">
+                                        <h3 class="font-black text-white mb-3">Roles</h3>
+                                        <form onsubmit="saveOwnerRole(event)" class="space-y-3">
+                                            <input id="role-email" type="email" required placeholder="Gmail/email" class="w-full bg-zinc-900 border border-zinc-800 rounded-xl px-3 py-2 text-white">
+                                            <input id="role-name" required placeholder="Role name" class="w-full bg-zinc-900 border border-zinc-800 rounded-xl px-3 py-2 text-white">
+                                            <input id="role-access" placeholder="Access description" class="w-full bg-zinc-900 border border-zinc-800 rounded-xl px-3 py-2 text-white">
+                                            <input id="role-image" type="url" placeholder="Role image URL" class="w-full bg-zinc-900 border border-zinc-800 rounded-xl px-3 py-2 text-white">
+                                            <input id="role-color" type="color" value="#E71D36" class="w-full h-10 bg-zinc-900 rounded-xl">
+                                            <button class="w-full bg-tunisiaRed text-white rounded-xl py-2 font-bold">Save Role</button>
+                                        </form>
+                                        <div class="space-y-2 mt-4">${getOwnerRoles().map(item => `<div class="flex justify-between gap-2 text-xs text-zinc-300"><span>${item.email} = ${item.role}</span><button type="button" onclick="removeOwnerItem('owner_roles','${item.id}')" class="text-red-300">Remove</button></div>`).join('')}</div>
+                                    </section>
                                 </div>
                             </div>
                         `;
                         break;
-                    case 'leaderboard':
+                    case 'tournaments':
                         contentContainer.innerHTML = `
-                            <div class="w-full space-y-6 animate-welcome py-6 max-w-xl mx-auto">
-                                <h2 class="text-3xl font-black uppercase tracking-wide text-center text-zinc-900 drop-shadow-sm">Leaderboard</h2>
-                                <div class="bg-zinc-950/95 backdrop-blur-xl border border-tunisiaRed/40 rounded-3xl p-8 space-y-6 shadow-neon text-center relative overflow-hidden group">
-                                    <div class="absolute inset-0 bg-gradient-to-b from-tunisiaRed/5 to-transparent pointer-events-none"></div>
-                                    <h3 class="text-2xl font-black text-white">Top Community Players</h3>
-                                    <p class="text-zinc-300 text-sm font-medium">Leaderboard rankings and statistics will be displayed here soon!</p>
+                            <div class="w-full space-y-6 animate-welcome py-6 max-w-6xl mx-auto">
+                                <h2 class="text-3xl font-black uppercase tracking-wide text-center text-zinc-900">Tournaments & Cups</h2>
+                                <div id="tournament-list" class="grid grid-cols-1 md:grid-cols-2 gap-5">
+                                    <article class="bg-zinc-950/95 border border-tunisiaRed/40 rounded-3xl p-6 shadow-neon">
+                                        <span class="text-xs text-tunisiaRed font-bold uppercase">Community Tournament</span>
+                                        <h3 class="text-xl text-white font-black mt-2">${siteSettings.tournamentTitle}</h3>
+                                        <p class="text-zinc-400 text-sm mt-3">Prize: 6,400 V-bucks</p>
+                                    </article>
+                                    <p class="text-zinc-700 col-span-full text-center">Loading official tournaments...</p>
                                 </div>
                             </div>
                         `;
+                        loadTournaments();
+                        break;
+                    case 'leaderboard':
+                        {
+                            const lbPlayers = getLeaderboardPlayers();
+                            const isOwner = currentUserData.role === 'owner';
+                            contentContainer.innerHTML = `
+                            <div class="w-full space-y-6 animate-welcome py-6 max-w-3xl mx-auto">
+                                <h2 class="text-3xl font-black uppercase tracking-wide text-center text-zinc-900 drop-shadow-sm">Leaderboard</h2>
+                                ${isOwner ? `
+                                <div class="bg-zinc-950/95 border border-yellow-500/40 rounded-3xl p-6 shadow-neon space-y-4">
+                                    <h3 class="font-black text-yellow-300 text-lg"><i class="fas fa-crown mr-2"></i>Add / Update Player</h3>
+                                    <p class="text-xs text-zinc-400">Type email → if this browser knows the account, name &amp; image load automatically. Choose Top, then Add.</p>
+                                    <p class="text-[11px] text-zinc-500">Note: login data is saved per browser. Same browser = auto fill. Other browser = fill name manually or login once here.</p>
+                                    <form onsubmit="saveLeaderboardPlayer(event)" class="grid sm:grid-cols-2 gap-3">
+                                        <label class="block text-xs font-bold text-zinc-300 sm:col-span-2">Email
+                                            <input id="lb-email" type="email" required placeholder="player@email.com" list="lb-known-emails" oninput="fillLeaderboardFromEmail()" onblur="fillLeaderboardFromEmail()" class="mt-1 w-full bg-zinc-900 border border-zinc-800 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-tunisiaRed">
+                                            <datalist id="lb-known-emails">${getKnownEmailsList().map(e => `<option value="${e}">`).join('')}</datalist>
+                                            <span id="lb-email-status" class="text-xs mt-1"></span>
+                                        </label>
+
+                                        <!-- Live profile preview -->
+                                        <div id="lb-preview" class="hidden sm:col-span-2 flex items-center gap-4 bg-zinc-900/80 border border-tunisiaRed/40 rounded-2xl p-4">
+                                            <img id="lb-preview-img" src="etfc.png" alt="Player" class="w-16 h-16 rounded-2xl object-cover border-2 border-tunisiaRed shrink-0">
+                                            <div class="min-w-0 text-left">
+                                                <p id="lb-preview-name" class="font-black text-white text-lg truncate">—</p>
+                                                <p id="lb-preview-desc" class="text-xs text-zinc-400 truncate">—</p>
+                                            </div>
+                                        </div>
+
+                                        <!-- Manual fields if profile not in this browser -->
+                                        <div id="lb-manual-fields" class="hidden sm:col-span-2 grid sm:grid-cols-2 gap-3">
+                                            <label class="block text-xs font-bold text-zinc-300">Name (manual)
+                                                <input id="lb-name" placeholder="Display name" class="mt-1 w-full bg-zinc-900 border border-zinc-800 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-tunisiaRed">
+                                            </label>
+                                            <label class="block text-xs font-bold text-zinc-300">Image URL (manual)
+                                                <input id="lb-image" type="url" placeholder="https://..." class="mt-1 w-full bg-zinc-900 border border-zinc-800 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-tunisiaRed">
+                                            </label>
+                                            <label class="block text-xs font-bold text-zinc-300 sm:col-span-2">Description (manual)
+                                                <input id="lb-description" placeholder="Short bio" class="mt-1 w-full bg-zinc-900 border border-zinc-800 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-tunisiaRed">
+                                            </label>
+                                        </div>
+
+                                        <label class="block text-xs font-bold text-zinc-300">Top (rank #)
+                                            <input id="lb-rank" type="number" min="1" required placeholder="1" class="mt-1 w-full bg-zinc-900 border border-zinc-800 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-tunisiaRed">
+                                        </label>
+                                        <label class="block text-xs font-bold text-zinc-300">Points
+                                            <input id="lb-points" type="number" min="0" value="0" class="mt-1 w-full bg-zinc-900 border border-zinc-800 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-tunisiaRed">
+                                        </label>
+                                        <label class="block text-xs font-bold text-zinc-300">Kills
+                                            <input id="lb-kills" type="number" min="0" value="0" class="mt-1 w-full bg-zinc-900 border border-zinc-800 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-tunisiaRed">
+                                        </label>
+                                        <label class="block text-xs font-bold text-zinc-300">Wins
+                                            <input id="lb-wins" type="number" min="0" value="0" class="mt-1 w-full bg-zinc-900 border border-zinc-800 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-tunisiaRed">
+                                        </label>
+                                        <button type="submit" class="sm:col-span-2 w-full bg-yellow-500 hover:bg-yellow-400 text-black py-2.5 rounded-xl font-black text-sm transition">Add to Leaderboard</button>
+                                    </form>
+                                </div>
+                                ` : ''}
+                                <div class="space-y-3">
+                                    ${lbPlayers.length ? lbPlayers.map((p, idx) => {
+                                        const displayRank = p.rank || (idx + 1);
+                                        const medal = displayRank === 1 ? '🥇' : displayRank === 2 ? '🥈' : displayRank === 3 ? '🥉' : `#${displayRank}`;
+                                        return `
+                                        <article class="bg-zinc-950/95 backdrop-blur-xl border border-tunisiaRed/40 rounded-2xl p-4 shadow-neon flex items-center gap-4 relative overflow-hidden">
+                                            <div class="w-12 h-12 shrink-0 flex items-center justify-center rounded-xl bg-tunisiaRed/15 border border-tunisiaRed/40 text-lg font-black text-white">${medal}</div>
+                                            <img src="${p.image || 'etfc.png'}" alt="${p.name}" class="w-14 h-14 rounded-2xl object-cover border-2 border-tunisiaRed/50 shrink-0">
+                                            <div class="min-w-0 flex-1 text-left">
+                                                <h3 class="font-black text-white text-base truncate">${p.name || 'Player'}</h3>
+                                                <p class="text-xs text-zinc-400 truncate">${p.description || p.email || ''}</p>
+                                                <div class="flex flex-wrap gap-2 mt-2">
+                                                    <span class="text-[10px] font-bold uppercase tracking-wide bg-zinc-900 border border-zinc-700 text-zinc-300 px-2 py-1 rounded-lg"><i class="fas fa-star text-yellow-400 mr-1"></i>${p.points || 0} pts</span>
+                                                    <span class="text-[10px] font-bold uppercase tracking-wide bg-zinc-900 border border-zinc-700 text-zinc-300 px-2 py-1 rounded-lg"><i class="fas fa-crosshairs text-tunisiaRed mr-1"></i>${p.kills || 0} kills</span>
+                                                    <span class="text-[10px] font-bold uppercase tracking-wide bg-zinc-900 border border-zinc-700 text-zinc-300 px-2 py-1 rounded-lg"><i class="fas fa-trophy text-green-400 mr-1"></i>${p.wins || 0} wins</span>
+                                                </div>
+                                            </div>
+                                            ${isOwner ? `
+                                            <div class="flex flex-col gap-1 shrink-0">
+                                                <button type="button" onclick="editLeaderboardPlayer('${p.id}')" class="bg-yellow-500 text-black px-3 py-1.5 rounded-lg text-xs font-black">Edit</button>
+                                                <button type="button" onclick="removeOwnerItem('leaderboard_players','${p.id}')" class="bg-red-950 text-red-200 px-3 py-1.5 rounded-lg text-xs font-black">Delete</button>
+                                            </div>
+                                            ` : ''}
+                                        </article>`;
+                                    }).join('') : `
+                                    <div class="bg-zinc-950/95 backdrop-blur-xl border border-tunisiaRed/40 rounded-3xl p-8 shadow-neon text-center">
+                                        <h3 class="text-xl font-black text-white">Top Community Players</h3>
+                                        <p class="text-zinc-400 text-sm mt-2">${isOwner ? 'No players yet. Use the form above to add someone by email.' : 'Leaderboard is empty for now. Check back soon!'}</p>
+                                    </div>
+                                    `}
+                                </div>
+                            </div>
+                        `;
+                        }
                         break;
                     case 'register':
                         contentContainer.innerHTML = `
@@ -928,6 +1812,7 @@
                             <div class="w-full space-y-6 animate-welcome py-6 max-w-6xl mx-auto">
                                 <h2 class="text-3xl font-black uppercase tracking-wide text-center text-zinc-900 drop-shadow-sm">Community Streamers</h2>
                                 <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                                    ${renderCustomStreamerCards()}
                                     <!-- FIRENOV Streamer Card -->
                                     <div class="bg-zinc-950/95 backdrop-blur-xl border border-tunisiaRed/40 rounded-3xl p-6 text-center space-y-5 shadow-neon relative overflow-hidden flex flex-col justify-between">
                                         <div class="w-24 h-24 mx-auto rounded-3xl bg-zinc-900 border-2 border-tunisiaRed overflow-hidden shadow-neon flex items-center justify-center">
@@ -1164,6 +2049,7 @@
                                 </div>
                             </div>
                         `;
+                        setupBuiltInStreamerControls();
                         break;
                     case 'discord':
                         contentContainer.innerHTML = `
@@ -1229,18 +2115,28 @@
                             </div>
                         `;
                         break;
-                    case 'rulebook':
+                    case 'shop':
                         contentContainer.innerHTML = `
-                            <div class="w-full space-y-6 animate-welcome py-6 max-w-xl mx-auto">
-                                <h2 class="text-3xl font-black uppercase tracking-wide text-center text-zinc-900 drop-shadow-sm">Rulebook</h2>
+                            <div class="w-full space-y-6 animate-welcome py-6 max-w-6xl mx-auto">
+                                <h2 class="text-3xl font-black uppercase tracking-wide text-center text-zinc-900">Fortnite Item Shop</h2>
+                                <div id="item-shop-list" class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-4"><p class="text-zinc-700 col-span-full text-center">Loading item shop...</p></div>
+                            </div>
+                        `;
+                        loadItemShop();
+                        break;
+                    case 'rulebook':
+                        const isArabic = currentRulebookLang === 'ar';
+                        contentContainer.innerHTML = `
+                            <div class="w-full space-y-6 animate-welcome py-6 max-w-3xl mx-auto">
+                                <div class="flex items-center justify-between gap-4"><h2 class="text-3xl font-black uppercase tracking-wide text-zinc-900 drop-shadow-sm">${isArabic ? 'دليل القوانين' : 'Rulebook'}</h2><div class="flex gap-2"><button onclick="setRulebookLang('en')" class="px-3 py-2 rounded-xl text-xs font-bold ${!isArabic ? 'bg-tunisiaRed text-white' : 'bg-zinc-900 text-zinc-400'}">English</button><button onclick="setRulebookLang('ar')" class="px-3 py-2 rounded-xl text-xs font-bold ${isArabic ? 'bg-tunisiaRed text-white' : 'bg-zinc-900 text-zinc-400'}">العربية</button></div></div>
                                 <div class="bg-zinc-950/95 backdrop-blur-xl border border-tunisiaRed/40 rounded-3xl p-8 space-y-6 shadow-neon text-left relative overflow-hidden group">
                                     <div class="absolute inset-0 bg-gradient-to-b from-tunisiaRed/5 to-transparent pointer-events-none"></div>
-                                    <h3 class="text-2xl font-black text-white text-center">Community & Tournament Rulebook</h3>
-                                    <ul class="list-disc list-inside text-zinc-300 text-sm space-y-2 font-medium">
-                                        <li>Fair play is mandatory. Cheating, exploiting bugs, or hacking will result in an immediate and permanent ban.</li>
-                                        <li>Respect all community members, players, and staff in discord and in-game.</li>
-                                        <li>Players must check in on time for scheduled tournament matches.</li>
-                                        <li>Disputes must be reported with video or screenshot evidence to staff members.</li>
+                                    <h3 class="text-2xl font-black text-white text-center">${isArabic ? 'قوانين المجتمع والبطولات' : 'Community & Tournament Rulebook'}</h3>
+                                    <ul class="list-disc list-inside text-zinc-300 text-sm space-y-2 font-medium" ${isArabic ? 'dir="rtl"' : ''}>
+                                        <li>${isArabic ? 'اللعب النزيه إجباري. الغش أو استغلال الأخطاء أو الاختراق يؤدي إلى الحظر.' : 'Fair play is mandatory. Cheating, exploiting bugs, or hacking results in a ban.'}</li>
+                                        <li>${isArabic ? 'احترم جميع أعضاء المجتمع واللاعبين والإدارة.' : 'Respect all community members, players, and staff.'}</li>
+                                        <li>${isArabic ? 'يجب تسجيل الحضور في الوقت المحدد للبطولات.' : 'Players must check in on time for tournament matches.'}</li>
+                                        <li>${isArabic ? 'يجب تقديم دليل فيديو أو صور عند الإبلاغ عن النزاعات.' : 'Disputes must include video or screenshot evidence.'}</li>
                                     </ul>
                                 </div>
                             </div>
