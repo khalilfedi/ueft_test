@@ -68,10 +68,25 @@
             animation: letterGlitch var(--glitch-duration, 2.8s) steps(1, end) infinite;
             animation-delay: var(--glitch-delay, 0s);
         }
+        @keyframes buttonVibrate {
+            0%, 100% { transform: translateX(0) rotate(0deg); }
+            25% { transform: translateX(-1px) rotate(-0.4deg); }
+            50% { transform: translateX(1px) rotate(0.4deg); }
+            75% { transform: translateX(-1px) rotate(-0.3deg); }
+        }
+        button {
+            will-change: transform;
+        }
+        button:hover {
+            animation: buttonVibrate 0.28s linear infinite;
+        }
         @media (prefers-reduced-motion: reduce) {
             .glitch-letter {
                 animation: none;
                 text-shadow: 2px 0 #E71D36, -2px 0 #22d3ee;
+            }
+            button:hover {
+                animation: none;
             }
         }
         body {
@@ -111,7 +126,7 @@
         const GOOGLE_CLIENT_ID = "";
         const WEBHOOK_URL = "https://discord.com/api/webhooks/1545751357448003614/cJYvn902vMVGdQ3ohx_h_DKuA1ufD0Rq";
         let currentTab = 'welcome';
-        let currentUserData = { username: '', avatarUrl: 'etfc.png' };
+        let currentUserData = { username: '', avatarUrl: 'etfc.png', description: '', email: '' };
         
         let welcomeTimer = null;
         let slideInterval = null;
@@ -127,11 +142,41 @@
             }
         }
 
+        function getLocalAccounts() {
+            try {
+                return JSON.parse(localStorage.getItem('local_accounts') || '[]');
+            } catch (error) {
+                return [];
+            }
+        }
+
+        async function hashPassword(password) {
+            const data = new TextEncoder().encode(password);
+            const hash = await crypto.subtle.digest('SHA-256', data);
+            return Array.from(new Uint8Array(hash), byte => byte.toString(16).padStart(2, '0')).join('');
+        }
+
+        function saveLocalSession(account) {
+            localStorage.setItem('email_username', account.username);
+            localStorage.setItem('email_address', account.email);
+            localStorage.setItem('email_avatar', account.avatarUrl || 'etfc.png');
+            localStorage.setItem('email_description', account.description || '');
+            currentUserData = {
+                username: account.username,
+                avatarUrl: account.avatarUrl || 'etfc.png',
+                description: account.description || '',
+                email: account.email
+            };
+        }
+
         window.addEventListener('DOMContentLoaded', async () => {
             const hash = window.location.hash;
             const savedUser = localStorage.getItem('discord_username');
             const savedAvatar = localStorage.getItem('discord_avatar');
             const savedEmailUser = localStorage.getItem('email_username');
+            const savedEmail = localStorage.getItem('email_address');
+            const savedEmailAvatar = localStorage.getItem('email_avatar');
+            const savedEmailDescription = localStorage.getItem('email_description');
 
             if (hash.includes('access_token')) {
                 const params = new URLSearchParams(hash.substring(1));
@@ -153,17 +198,17 @@
                     localStorage.setItem('discord_username', username);
                     localStorage.setItem('discord_avatar', avatarUrl);
                     window.history.replaceState({}, document.title, window.location.pathname);
-                    currentUserData = { username, avatarUrl };
+                    currentUserData = { username, avatarUrl, description: '', email: '' };
                     renderDashboard();
                 } catch (error) {
                     console.error('Failed to fetch Discord profile:', error);
                     renderLoggedOutState();
                 }
             } else if (savedUser) {
-                currentUserData = { username: savedUser, avatarUrl: savedAvatar || 'etfc.png' };
+                currentUserData = { username: savedUser, avatarUrl: savedAvatar || 'etfc.png', description: '', email: '' };
                 renderDashboard();
             } else if (savedEmailUser) {
-                currentUserData = { username: savedEmailUser, avatarUrl: 'etfc.png' };
+                currentUserData = { username: savedEmailUser, avatarUrl: savedEmailAvatar || 'etfc.png', description: savedEmailDescription || '', email: savedEmail || '' };
                 renderDashboard();
             } else {
                 renderLoggedOutState();
